@@ -324,8 +324,8 @@ npm run dev
 3. **构建生产版本**
 ```bash
 npm run build
-npm run preview
-npx serve -s dist -l 3000
+npm run serve    
+
 ```
 
 ```bass 
