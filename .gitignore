@@ -70,7 +70,7 @@ frontend/dist/
 Dockerfile*
 docker-compose*.yml
 .dockerignore
-nginx.conf
+#nginx.conf
 Makefile
 build-multiplatform.sh
 
