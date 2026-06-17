@@ -10,10 +10,10 @@ start "Celery Worker" cmd /k start_celery.bat
 echo 启动定时任务调度器...
 start "Task Scheduler" cmd /k start_scheduler.bat
 
-echo 启动Nginx...
-cd C:\nginx
-C:\nginx\nginx.exe
-nginx -s reload
+echo 正在启动 Nginx...
+cd /d C:\nginx
+start nginx
+echo Nginx 已启动
 
 echo 所有服务已启动!
 echo 前端地址: http://localhost
