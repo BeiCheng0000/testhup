@@ -9,20 +9,33 @@ from .models import TestReport, ReportTemplate
 from apps.executions.models import TestPlan, TestRun, TestRunCase
 from apps.testcases.models import TestCase
 from apps.requirement_analysis.models import RequirementAnalysis, GeneratedTestCase, BusinessRequirement
+from apps.projects.helpers import get_user_accessible_projects
 
 class TestReportViewSet(viewsets.ModelViewSet):
     """测试报告视图集"""
     queryset = TestReport.objects.all()
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return TestReport.objects.filter(
+            project__in=accessible_projects
+        ).distinct()
     
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
         """获取概览数据"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
         
-        # 基础查询集
-        plans_qs = TestPlan.objects.filter(is_active=True)
-        cases_qs = TestCase.objects.all()
+        # 基础查询集 - 限制为用户有权限的项目
+        plans_qs = TestPlan.objects.filter(
+            is_active=True,
+            projects__in=accessible_projects
+        ).distinct()
+        cases_qs = TestCase.objects.filter(project__in=accessible_projects)
         
         if project_id:
             plans_qs = plans_qs.filter(projects__id=project_id)
@@ -80,10 +93,15 @@ class TestReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def status_distribution(self, request):
         """获取执行状态分布"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
         version_id = request.query_params.get('version')
         
-        runs_qs = TestRun.objects.all()
+        runs_qs = TestRun.objects.filter(
+            Q(project__in=accessible_projects) |
+            Q(test_plan__projects__in=accessible_projects)
+        ).distinct()
         if project_id:
             runs_qs = runs_qs.filter(project_id=project_id)
         if version_id:
@@ -103,8 +121,13 @@ class TestReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def defect_distribution(self, request):
         """获取缺陷分布 (按优先级)"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
-        qs = TestRunCase.objects.filter(status='failed')
+        qs = TestRunCase.objects.filter(status='failed').filter(
+            Q(test_run__project__in=accessible_projects) |
+            Q(test_run__test_plan__projects__in=accessible_projects)
+        ).distinct()
         
         if project_id:
             qs = qs.filter(test_run__project_id=project_id)
@@ -125,9 +148,14 @@ class TestReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def failed_cases_top(self, request):
         """获取失败用例TOP榜"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
         
-        qs = TestRunCase.objects.filter(status='failed')
+        qs = TestRunCase.objects.filter(status='failed').filter(
+            Q(test_run__project__in=accessible_projects) |
+            Q(test_run__test_plan__projects__in=accessible_projects)
+        ).distinct()
         if project_id:
             qs = qs.filter(test_run__project_id=project_id)
             
@@ -143,6 +171,8 @@ class TestReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def execution_trend(self, request):
         """获取每日执行趋势"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
         days = int(request.query_params.get('days', 7))
         
@@ -161,7 +191,10 @@ class TestReportViewSet(viewsets.ModelViewSet):
         qs = TestRunCase.objects.filter(
             executed_at__gte=start_datetime,
             status__in=['passed', 'failed', 'blocked', 'retest']
-        )
+        ).filter(
+            Q(test_run__project__in=accessible_projects) |
+            Q(test_run__test_plan__projects__in=accessible_projects)
+        ).distinct()
         
         if project_id:
             qs = qs.filter(test_run__project_id=project_id)
@@ -195,11 +228,17 @@ class TestReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def ai_efficiency(self, request):
         """获取AI效能分析"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
         
-        cases_qs = TestCase.objects.all()
-        generated_qs = GeneratedTestCase.objects.all()
-        requirements_qs = BusinessRequirement.objects.all()
+        cases_qs = TestCase.objects.filter(project__in=accessible_projects)
+        generated_qs = GeneratedTestCase.objects.filter(
+            requirement__analysis__document__project__in=accessible_projects
+        )
+        requirements_qs = BusinessRequirement.objects.filter(
+            analysis__document__project__in=accessible_projects
+        )
         
         if project_id:
             cases_qs = cases_qs.filter(project_id=project_id)
@@ -236,12 +275,17 @@ class TestReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def team_workload(self, request):
         """获取团队工作量"""
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
         project_id = request.query_params.get('project')
         
         qs = TestRunCase.objects.filter(
             status__in=['passed', 'failed', 'blocked', 'retest'],
             executed_by__isnull=False
-        )
+        ).filter(
+            Q(test_run__project__in=accessible_projects) |
+            Q(test_run__test_plan__projects__in=accessible_projects)
+        ).distinct()
         
         if project_id:
             qs = qs.filter(test_run__project_id=project_id)

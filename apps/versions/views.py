@@ -7,6 +7,7 @@ from django.db import models
 from .models import Version
 from .serializers import VersionSerializer, VersionCreateSerializer
 from apps.projects.models import Project
+from apps.projects.helpers import get_user_accessible_projects
 
 # 版本管理视图
 class VersionListCreateView(generics.ListCreateAPIView):
@@ -26,9 +27,7 @@ class VersionListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         # 只显示用户有权限访问的项目的版本
         user = self.request.user
-        accessible_projects = Project.objects.filter(
-            models.Q(owner=user) | models.Q(members=user)
-        ).distinct()
+        accessible_projects = get_user_accessible_projects(user)
         
         queryset = Version.objects.filter(projects__in=accessible_projects).distinct()
         

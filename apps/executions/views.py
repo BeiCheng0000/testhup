@@ -3,9 +3,11 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from django.db import transaction
+from django.db import models
 from .models import TestPlan, TestRun, TestRunCase, TestRunCaseHistory
 from apps.testcases.models import TestCase
 from apps.projects.models import Project
+from apps.projects.helpers import get_user_accessible_projects
 from .serializers import (TestPlanSerializer, TestRunSerializer, TestRunCaseSerializer, 
                          TestPlanDetailSerializer, TestRunCaseDetailSerializer, 
                          TestRunCaseHistorySerializer)
@@ -16,6 +18,13 @@ class TestPlanViewSet(viewsets.ModelViewSet):
     """
     queryset = TestPlan.objects.all().order_by('-created_at')
     serializer_class = TestPlanSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return TestPlan.objects.filter(
+            projects__in=accessible_projects
+        ).distinct().order_by('-created_at')
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -98,7 +107,10 @@ class TestPlanViewSet(viewsets.ModelViewSet):
         
         test_plan = serializer.save(creator=self.request.user, version=version)
 
-        project_ids = self.request.data.get('projects', [])
+        # 只允许用户有权限的项目
+        accessible_projects = get_user_accessible_projects(self.request.user)
+        accessible_project_ids = set(accessible_projects.values_list('id', flat=True))
+        project_ids = [pid for pid in self.request.data.get('projects', []) if int(pid) in accessible_project_ids]
         testcase_ids = self.request.data.get('testcases', [])
         self._sync_test_runs(test_plan, project_ids, testcase_ids)
 
@@ -124,9 +136,20 @@ class TestPlanViewSet(viewsets.ModelViewSet):
                     'detail': '请选择有效的项目'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
+            # 只返回用户有权限访问的项目的测试用例
+            accessible_projects = get_user_accessible_projects(request.user)
+            accessible_project_ids = set(accessible_projects.values_list('id', flat=True))
+            allowed_project_ids = [pid for pid in project_ids if pid in accessible_project_ids]
+            
+            if not allowed_project_ids:
+                return Response({
+                    'error': '没有权限访问所选项目',
+                    'detail': '您未加入所选项目'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
             # 获取指定项目的测试用例
             testcases = TestCase.objects.filter(
-                project_id__in=project_ids,
+                project_id__in=allowed_project_ids,
                 status__in=['draft', 'active']  # 包含草稿和激活状态的测试用例
             ).values('id', 'title', 'priority', 'test_type', 'project__name')
             
@@ -159,7 +182,10 @@ class TestPlanViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             test_plan = serializer.save(version=version)
 
-            project_ids = self.request.data.get('projects', [])
+            # 只允许用户有权限的项目
+            accessible_projects = get_user_accessible_projects(self.request.user)
+            accessible_project_ids = set(accessible_projects.values_list('id', flat=True))
+            project_ids = [pid for pid in self.request.data.get('projects', []) if int(pid) in accessible_project_ids]
             testcase_ids = self.request.data.get('testcases', [])
             self._sync_test_runs(test_plan, project_ids, testcase_ids)
 
@@ -177,12 +203,28 @@ class TestRunViewSet(viewsets.ModelViewSet):
     queryset = TestRun.objects.all().order_by('-created_at')
     serializer_class = TestRunSerializer
 
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return TestRun.objects.filter(
+            models.Q(project__in=accessible_projects) |
+            models.Q(test_plan__projects__in=accessible_projects)
+        ).distinct().order_by('-created_at')
+
 class TestRunCaseViewSet(viewsets.ModelViewSet):
     """
     测试执行用例视图集
     """
     queryset = TestRunCase.objects.all()
     serializer_class = TestRunCaseSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return TestRunCase.objects.filter(
+            models.Q(test_run__project__in=accessible_projects) |
+            models.Q(test_run__test_plan__projects__in=accessible_projects)
+        ).distinct()
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -238,3 +280,11 @@ class TestRunCaseHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = TestRunCaseHistory.objects.all().order_by('-executed_at')
     serializer_class = TestRunCaseHistorySerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return TestRunCaseHistory.objects.filter(
+            models.Q(run_case__test_run__project__in=accessible_projects) |
+            models.Q(run_case__test_run__test_plan__projects__in=accessible_projects)
+        ).distinct().order_by('-executed_at')

@@ -12,6 +12,7 @@ from .serializers import (
 )
 from apps.testcases.models import TestCase
 from apps.users.models import User
+from apps.projects.helpers import get_user_accessible_projects
 
 
 class TestCaseReviewViewSet(viewsets.ModelViewSet):
@@ -23,9 +24,14 @@ class TestCaseReviewViewSet(viewsets.ModelViewSet):
         return TestCaseReviewSerializer
     
     def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        
         queryset = TestCaseReview.objects.select_related('creator').prefetch_related(
             'projects', 'testcases', 'reviewers', 'comments', 'reviewassignment_set__reviewer'
-        )
+        ).filter(
+            projects__in=accessible_projects
+        ).distinct()
         
         # 过滤参数
         project_id = self.request.query_params.get('project', None)
@@ -128,10 +134,15 @@ class TestCaseReviewCommentViewSet(viewsets.ModelViewSet):
         return TestCaseReviewCommentSerializer
     
     def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        
         review_id = self.request.query_params.get('review', None)
         testcase_id = self.request.query_params.get('testcase', None)
         
-        queryset = TestCaseReviewComment.objects.select_related('author', 'testcase', 'review')
+        queryset = TestCaseReviewComment.objects.select_related('author', 'testcase', 'review').filter(
+            review__projects__in=accessible_projects
+        ).distinct()
         
         if review_id:
             queryset = queryset.filter(review_id=review_id)
@@ -153,8 +164,13 @@ class ReviewTemplateViewSet(viewsets.ModelViewSet):
         return ReviewTemplateSerializer
     
     def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        
         project_id = self.request.query_params.get('project', None)
-        queryset = ReviewTemplate.objects.select_related('creator').prefetch_related('project', 'default_reviewers')
+        queryset = ReviewTemplate.objects.select_related('creator').prefetch_related('project', 'default_reviewers').filter(
+            project__in=accessible_projects
+        ).distinct()
         
         if project_id:
             queryset = queryset.filter(project__id=project_id)

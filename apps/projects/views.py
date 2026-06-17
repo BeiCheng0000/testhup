@@ -84,7 +84,8 @@ def get_project_members(request, project_id):
         project_members = ProjectMember.objects.filter(project=project).select_related('user')
         for member in project_members:
             members.append({
-                'id': member.user.id,
+                'id': member.id,  # ProjectMember ID，用于删除操作
+                'user_id': member.user.id,  # User ID
                 'username': member.user.username,
                 'email': member.user.email,
                 'first_name': member.user.first_name,

@@ -45,6 +45,7 @@ from .serializers import (
     GenerationConfigSerializer
 )
 from .services import RequirementAnalysisService, DocumentProcessor
+from apps.projects.helpers import get_user_accessible_projects
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,13 @@ class RequirementDocumentViewSet(viewsets.ModelViewSet):
     queryset = RequirementDocument.objects.all()
     serializer_class = RequirementDocumentSerializer
     parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return RequirementDocument.objects.filter(
+            project__in=accessible_projects
+        ).distinct()
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -190,6 +198,13 @@ class RequirementAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = RequirementAnalysis.objects.all()
     serializer_class = RequirementAnalysisSerializer
 
+    def get_queryset(self):
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        return RequirementAnalysis.objects.filter(
+            document__project__in=accessible_projects
+        ).distinct()
+
     @action(detail=True, methods=['get'])
     def requirements(self, request, pk=None):
         """获取分析的需求列表"""
@@ -205,7 +220,11 @@ class BusinessRequirementViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BusinessRequirementSerializer
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        queryset = BusinessRequirement.objects.filter(
+            analysis__document__project__in=accessible_projects
+        ).distinct()
         analysis_id = self.request.query_params.get('analysis_id')
         if analysis_id:
             queryset = queryset.filter(analysis_id=analysis_id)
@@ -456,7 +475,11 @@ class GeneratedTestCaseViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'patch']  # 只允许GET和PATCH方法
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        queryset = GeneratedTestCase.objects.filter(
+            requirement__analysis__document__project__in=accessible_projects
+        ).distinct()
 
         # 按需求ID过滤
         requirement_id = self.request.query_params.get('requirement_id')
@@ -553,7 +576,11 @@ class AnalysisTaskViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AnalysisTaskSerializer
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        queryset = AnalysisTask.objects.filter(
+            document__project__in=accessible_projects
+        ).distinct()
         document_id = self.request.query_params.get('document_id')
         if document_id:
             queryset = queryset.filter(document_id=document_id)
@@ -1445,7 +1472,11 @@ class TestCaseGenerationTaskViewSet(viewsets.ModelViewSet):
     lookup_field = 'task_id'  # 使用task_id作为查找字段
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        user = self.request.user
+        accessible_projects = get_user_accessible_projects(user)
+        queryset = TestCaseGenerationTask.objects.filter(
+            project__in=accessible_projects
+        ).distinct()
 
         # 安全检查：确保request有query_params属性
         if not hasattr(self.request, 'query_params'):

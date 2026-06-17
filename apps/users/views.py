@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.contrib.auth import login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.db import models
 from .models import User
 from .serializers import UserSerializer, UserCreateSerializer, LoginSerializer
 
@@ -94,10 +95,21 @@ def profile_view(request):
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
-class UserListView(generics.ListCreateAPIView):
+class UserListView(generics.ListAPIView):
     queryset = User.objects.all().order_by('username')
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                models.Q(username__icontains=search) | 
+                models.Q(email__icontains=search) |
+                models.Q(first_name__icontains=search)
+            )
+        return queryset[:20]  # 限制返回数量
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all().order_by('username')
