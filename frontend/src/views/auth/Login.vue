@@ -117,9 +117,9 @@
           </button>
           <button
             type="button"
-            class="mode-tab"
-            :class="{ active: loginMode === 'sms' }"
-            @click="loginMode = 'sms'; refreshCaptcha()"
+            class="mode-tab disabled-tab"
+            :class="{ active: false }"
+            @click="ElMessage.warning('暂时不可用')"
           >
             短信登录
           </button>
@@ -753,6 +753,12 @@ onUnmounted(() => {
         color: #667eea;
         font-weight: 600;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      &.disabled-tab {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: auto;
       }
 
       &:hover:not(.active) {
