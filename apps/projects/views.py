@@ -97,19 +97,100 @@ def get_project_members(request, project_id):
     except Project.DoesNotExist:
         return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
 
-@api_view(['DELETE'])
+@api_view(['DELETE', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
-def remove_project_member(request, project_id, member_id):
+def project_member_detail(request, project_id, member_id):
+    """项目成员详情：更新角色(PATCH) / 删除成员(DELETE)"""
     try:
         project = Project.objects.get(id=project_id)
-        if project.owner != request.user:
-            return Response({'error': '无权限删除成员'}, status=status.HTTP_403_FORBIDDEN)
-        
+    except Project.DoesNotExist:
+        return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # 只有项目负责人才能管理成员
+    if project.owner != request.user:
+        return Response({'error': '无权限管理成员'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
         member = ProjectMember.objects.get(id=member_id, project=project)
+    except ProjectMember.DoesNotExist:
+        return Response({'error': '成员不存在'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'DELETE':
         member.delete()
         return Response({'message': '成员删除成功'})
-    except (Project.DoesNotExist, ProjectMember.DoesNotExist):
-        return Response({'error': '项目或成员不存在'}, status=status.HTTP_404_NOT_FOUND)
+    
+    elif request.method == 'PATCH':
+        # 更新成员角色
+        new_role = request.data.get('role', '').strip()
+        valid_roles = [choice[0] for choice in ProjectMember.ROLE_CHOICES if choice[0] != 'owner']
+        if new_role not in valid_roles:
+            return Response(
+                {'error': f'无效的角色，可选值: {", ".join(valid_roles)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        member.role = new_role
+        member.save()
+        return Response({
+            'id': member.id,
+            'user_id': member.user.id,
+            'username': member.user.username,
+            'email': member.user.email,
+            'role': member.role,
+            'joined_at': member.joined_at
+        })
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def change_project_owner(request, project_id):
+    """更改项目负责人"""
+    try:
+        project = Project.objects.get(id=project_id)
+    except Project.DoesNotExist:
+        return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # 只有当前负责人才能移交权限
+    if project.owner != request.user:
+        return Response({'error': '只有项目负责人才能更改负责人'}, status=status.HTTP_403_FORBIDDEN)
+    
+    new_owner_id = request.data.get('user_id')
+    if not new_owner_id:
+        return Response({'error': '请提供新负责人的 user_id'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        from apps.users.models import User
+        new_owner = User.objects.get(id=new_owner_id)
+    except Exception:
+        return Response({'error': '用户不存在'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if new_owner == project.owner:
+        return Response({'error': '新负责人不能是当前负责人'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    old_owner = project.owner
+    
+    # 检查新负责人是否已经是项目成员
+    if not ProjectMember.objects.filter(project=project, user=new_owner).exists():
+        # 如果还不是成员，先添加为成员
+        ProjectMember.objects.create(project=project, user=new_owner, role='admin')
+    
+    # 更改项目负责人
+    project.owner = new_owner
+    project.save()
+    
+    # 将旧负责人添加为成员（如果还不是），角色设为 admin
+    ProjectMember.objects.get_or_create(
+        project=project, 
+        user=old_owner, 
+        defaults={'role': 'admin'}
+    )
+    
+    return Response({
+        'message': '负责人更改成功',
+        'owner': {
+            'id': new_owner.id,
+            'username': new_owner.username,
+            'email': new_owner.email,
+        }
+    })
 
 class ProjectEnvironmentListCreateView(generics.ListCreateAPIView):
     serializer_class = ProjectEnvironmentSerializer
