@@ -12,13 +12,30 @@ class TestRunCaseHistorySerializer(serializers.ModelSerializer):
 
 class TestRunCaseSimpleSerializer(serializers.ModelSerializer):
     testcase = serializers.StringRelatedField()
+    title = serializers.SerializerMethodField()
     module = serializers.SerializerMethodField()
+    preconditions = serializers.SerializerMethodField()
+    steps = serializers.SerializerMethodField()
+    expected_result = serializers.SerializerMethodField()
+    
     class Meta:
         model = TestRunCase
-        fields = ('id', 'testcase', 'module', 'status')
+        fields = ('id', 'testcase', 'title', 'module', 'preconditions', 'steps', 'expected_result', 'status', 'priority')
+    
+    def get_title(self, obj):
+        return obj.testcase.title if obj.testcase else ''
     
     def get_module(self, obj):
         return obj.testcase.module if obj.testcase else ''
+    
+    def get_preconditions(self, obj):
+        return obj.testcase.preconditions if obj.testcase else ''
+    
+    def get_steps(self, obj):
+        return obj.testcase.steps if obj.testcase else ''
+    
+    def get_expected_result(self, obj):
+        return obj.testcase.expected_result if obj.testcase else ''
 
 class TestRunCaseDetailSerializer(serializers.ModelSerializer):
     testcase = serializers.StringRelatedField()

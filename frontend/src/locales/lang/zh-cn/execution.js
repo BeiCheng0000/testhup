@@ -27,8 +27,13 @@ export default {
   createdAt: '创建时间',
   actions: '操作',
   testCase: '测试用例',
+  caseTitle: '用例标题',
   executionStatus: '执行状态',
   comments: '备注',
+  addComment: '备注',
+  editCase: '修改',
+  editCaseTitle: '修改用例数据',
+  actualResult: '实际结果',
   executedBy: '执行者',
   executedAt: '执行时间',
 

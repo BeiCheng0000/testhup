@@ -27,8 +27,13 @@ export default {
   createdAt: 'Created At',
   actions: 'Actions',
   testCase: 'Test Case',
+  caseTitle: 'Case Title',
   executionStatus: 'Execution Status',
   comments: 'Comments',
+  addComment: 'Comments',
+  editCase: 'Edit',
+  editCaseTitle: 'Edit Case Data',
+  actualResult: 'Actual Result',
   executedBy: 'Executed By',
   executedAt: 'Executed At',
 

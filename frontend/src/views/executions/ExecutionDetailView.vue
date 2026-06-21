@@ -117,42 +117,101 @@
               {{ row.module || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="testcase" :label="$t('execution.testCase')" min-width="250" />
-          <el-table-column :label="$t('execution.executionStatus')" width="150">
-            <template #default="scope">
-              <el-select
-                v-model="scope.row.status"
-                @change="updateCaseStatus(scope.row)"
-                size="small">
-                <el-option :label="$t('execution.untested')" value="untested" />
-                <el-option :label="$t('execution.passed')" value="passed" />
-                <el-option :label="$t('execution.failed')" value="failed" />
-                <el-option :label="$t('execution.blocked')" value="blocked" />
-                <el-option :label="$t('execution.retest')" value="retest" />
-              </el-select>
+          <el-table-column prop="priority" :label="$t('testcase.priority')" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getPriorityTagType(row.priority)" size="small">
+                {{ getPriorityText(row.priority) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column :label="$t('execution.comments')" min-width="250">
-            <template #default="scope">
-              <el-input
-                v-model="scope.row.comments"
-                :placeholder="$t('execution.commentsPlaceholder')"
-                type="textarea"
-                :rows="2"
-                size="small"
-                @blur="updateCaseDetails(scope.row)">
-              </el-input>
+          <el-table-column prop="title" :label="$t('execution.caseTitle')" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.title || row.testcase || '-' }}
             </template>
           </el-table-column>
-          <el-table-column :label="$t('execution.actions')" width="120" fixed="right">
+          <el-table-column prop="preconditions" :label="$t('testcase.preconditions')" min-width="200">
+            <template #default="{ row }">
+              <span v-if="row.preconditions" v-html="formatRichText(row.preconditions)" class="rich-cell"></span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="steps" :label="$t('testcase.steps')" min-width="240">
+            <template #default="{ row }">
+              <span v-if="row.steps" v-html="formatRichText(row.steps)" class="rich-cell"></span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="expected_result" :label="$t('testcase.expectedResult')" min-width="300">
+            <template #default="{ row }">
+              <span v-if="row.expected_result" v-html="formatRichText(row.expected_result)" class="rich-cell"></span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('execution.actions')" width="170" fixed="right">
             <template #default="scope">
-              <el-button
-                size="small"
-                type="primary"
-                :icon="Clock"
-                @click="viewCaseHistory(scope.row)">
-                {{ $t('execution.viewHistory') }}
-              </el-button>
+              <div class="actions-cell">
+                <div class="actions-row">
+                  <el-dropdown
+                    trigger="click"
+                    @command="(cmd) => handleStatusCommand(scope.row, cmd)">
+                    <el-button
+                      size="small"
+                      :type="getStatusButtonType(scope.row.status)"
+                      :icon="getStatusButtonIcon(scope.row.status)">
+                      {{ getStatusText(scope.row.status) }}
+                      <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="untested" :icon="QuestionFilled">
+                          {{ $t('execution.untested') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item command="passed" :icon="CircleCheck">
+                          {{ $t('execution.passed') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item command="failed" :icon="CircleClose">
+                          {{ $t('execution.failed') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item command="blocked" :icon="WarningFilled">
+                          {{ $t('execution.blocked') }}
+                        </el-dropdown-item>
+                        <el-dropdown-item command="retest">
+                          {{ $t('execution.retest') }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                  <el-tooltip :content="$t('execution.viewHistory')" placement="top">
+                    <el-button
+                      size="small"
+                      circle
+                      type="primary"
+                      @click="viewCaseHistory(scope.row)">
+                      <el-icon><Clock /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+                <div class="actions-row">
+                  <el-tooltip :content="$t('execution.editCase')" placement="top">
+                    <el-button
+                      size="small"
+                      circle
+                      type="success"
+                      @click="openEditDialog(scope.row)">
+                      <el-icon><EditPen /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip :content="$t('execution.addComment')" placement="top">
+                    <el-button
+                      size="small"
+                      circle
+                      type="warning"
+                      @click="openCommentDialog(scope.row)">
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -194,6 +253,68 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 备注对话框 -->
+    <el-dialog
+      :title="$t('execution.comments')"
+      v-model="commentDialogVisible"
+      width="500px">
+      <el-input
+        v-model="editingComment"
+        :placeholder="$t('execution.commentsPlaceholder')"
+        type="textarea"
+        :rows="4"
+        @keyup.enter.ctrl="saveComment" />
+      <template #footer>
+        <el-button @click="commentDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveComment">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 修改用例对话框 -->
+    <el-dialog
+      :title="$t('execution.editCaseTitle')"
+      v-model="editDialogVisible"
+      width="650px">
+      <el-form :model="editForm" label-width="90px" label-position="right">
+        <el-form-item :label="$t('execution.caseTitle')">
+          <el-input v-model="editForm.title" placeholder="请输入用例标题" />
+        </el-form-item>
+        <el-form-item :label="$t('testcase.preconditions')">
+          <el-input
+            v-model="editForm.preconditions"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入前置条件" />
+        </el-form-item>
+        <el-form-item :label="$t('testcase.steps')">
+          <el-input
+            v-model="editForm.steps"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入操作步骤" />
+        </el-form-item>
+        <el-form-item :label="$t('testcase.expectedResult')">
+          <el-input
+            v-model="editForm.expected_result"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入预期结果" />
+        </el-form-item>
+        <el-form-item :label="$t('testcase.priority')">
+          <el-select v-model="editForm.priority" style="width:100%">
+            <el-option :label="$t('testcase.low')" value="low" />
+            <el-option :label="$t('testcase.medium')" value="medium" />
+            <el-option :label="$t('testcase.high')" value="high" />
+            <el-option :label="$t('testcase.critical')" value="critical" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveEditCase" :loading="editSaving">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -203,8 +324,8 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Delete, Clock, Document, CircleCheck, CircleClose,
-  WarningFilled, QuestionFilled, Stamp, FolderOpened
+  Delete, Clock, Document, CircleCheck, CircleClose, Edit, EditPen,
+  WarningFilled, QuestionFilled, Stamp, FolderOpened, ArrowDown
 } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 
@@ -219,6 +340,80 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const isDeleting = ref(false)
 const tableRef = ref(null)
+const commentDialogVisible = ref(false)
+const editingComment = ref('')
+const currentCommentRow = ref(null)
+const editDialogVisible = ref(false)
+const editForm = ref({ title: '', preconditions: '', steps: '', expected_result: '', priority: 'medium' })
+const editCurrentRow = ref(null)
+const editSaving = ref(false)
+
+const formatRichText = (text) => {
+  if (!text) return ''
+  let result = text.replace(/\r?\n/g, '<br/>')
+  if (!/<br/i.test(result)) {
+    result = result.replace(/([。！？”\"）\\)\u4e00-\u9fff\w])(\d+)[\.\、](?=\s*\D)/g, '$1<br/>$2.')
+  }
+  return result
+}
+
+const openCommentDialog = (row) => {
+  currentCommentRow.value = row
+  editingComment.value = row.comments || ''
+  commentDialogVisible.value = true
+}
+
+const saveComment = async () => {
+  if (!currentCommentRow.value) return
+  try {
+    currentCommentRow.value.comments = editingComment.value
+    await updateCaseDetails(currentCommentRow.value)
+    commentDialogVisible.value = false
+    currentCommentRow.value = null
+  } catch (error) {
+    ElMessage.error(t('execution.detailsUpdateFailed'))
+  }
+}
+
+const openEditDialog = (row) => {
+  editCurrentRow.value = row
+  editForm.value = {
+    title: row.title || row.testcase || '',
+    preconditions: row.preconditions || '',
+    steps: row.steps || '',
+    expected_result: row.expected_result || '',
+    priority: row.priority || 'medium'
+  }
+  editDialogVisible.value = true
+}
+
+const saveEditCase = async () => {
+  if (!editCurrentRow.value) return
+  editSaving.value = true
+  try {
+    await api.patch(`/executions/run_cases/${editCurrentRow.value.id}/update_testcase/`, {
+      title: editForm.value.title,
+      preconditions: editForm.value.preconditions,
+      steps: editForm.value.steps,
+      expected_result: editForm.value.expected_result,
+      priority: editForm.value.priority
+    })
+    // 更新当前行显示
+    const row = editCurrentRow.value
+    row.title = editForm.value.title
+    row.preconditions = editForm.value.preconditions
+    row.steps = editForm.value.steps
+    row.expected_result = editForm.value.expected_result
+    row.priority = editForm.value.priority
+    editDialogVisible.value = false
+    editCurrentRow.value = null
+    ElMessage.success(t('execution.detailsUpdateSuccess'))
+  } catch (error) {
+    ElMessage.error(t('execution.detailsUpdateFailed'))
+  } finally {
+    editSaving.value = false
+  }
+}
 
 const fetchTestPlan = async () => {
   try {
@@ -404,6 +599,54 @@ const getStatusText = (status) => {
     'retest': t('execution.retest')
   }
   return textMap[status] || status
+}
+
+const getStatusButtonType = (status) => {
+  const map = {
+    'untested': 'info',
+    'passed': 'success',
+    'failed': 'danger',
+    'blocked': 'warning',
+    'retest': 'primary'
+  }
+  return map[status] || 'info'
+}
+
+const getStatusButtonIcon = (status) => {
+  const map = {
+    'untested': QuestionFilled,
+    'passed': CircleCheck,
+    'failed': CircleClose,
+    'blocked': WarningFilled,
+    'retest': Clock
+  }
+  return map[status] || QuestionFilled
+}
+
+const handleStatusCommand = async (row, newStatus) => {
+  if (row.status === newStatus) return
+  row.status = newStatus
+  await updateCaseStatus(row)
+}
+
+const getPriorityText = (priority) => {
+  const map = {
+    'low': t('testcase.low'),
+    'medium': t('testcase.medium'),
+    'high': t('testcase.high'),
+    'critical': t('testcase.critical')
+  }
+  return map[priority] || priority || '-'
+}
+
+const getPriorityTagType = (priority) => {
+  const map = {
+    'low': 'info',
+    'medium': '',
+    'high': 'warning',
+    'critical': 'danger'
+  }
+  return map[priority] || 'info'
 }
 
 onMounted(() => {
@@ -599,6 +842,42 @@ onMounted(() => {
 .execution-table {
   border-radius: 8px;
   overflow: hidden;
+}
+
+.actions-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.actions-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.actions-cell .el-button {
+  margin: 0;
+}
+
+.actions-cell .el-button.is-circle {
+  padding: 5px;
+}
+
+.rich-cell {
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: normal;
+  display: block;
+}
+
+.text-muted {
+  color: #c0c4cc;
+}
+
+:deep(.el-table__body-wrapper .cell) {
+  word-break: break-word;
 }
 
 /* 分页 */

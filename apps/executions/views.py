@@ -264,6 +264,28 @@ class TestRunCaseViewSet(viewsets.ModelViewSet):
         
         return Response(TestRunCaseDetailSerializer(run_case).data)
 
+    @action(detail=True, methods=['patch'])
+    def update_testcase(self, request, pk=None):
+        """
+        更新关联的测试用例数据（标题、前置条件、操作步骤、预期结果、优先级）
+        调用方通过 TestRunCase ID 定位并修改关联的 TestCase
+        """
+        run_case = self.get_object()
+        testcase = run_case.testcase
+        if not testcase:
+            return Response({'error': '关联的测试用例不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+        updatable_fields = ['title', 'preconditions', 'steps', 'expected_result', 'priority', 'description']
+        changed = False
+        for field in updatable_fields:
+            if field in request.data:
+                setattr(testcase, field, request.data[field])
+                changed = True
+        if not changed:
+            return Response({'error': '没有可更新的字段'}, status=status.HTTP_400_BAD_REQUEST)
+        testcase.save(update_fields=[f for f in updatable_fields if f in request.data] + ['updated_at'])
+        return Response({'message': '用例数据更新成功'})
+
     @action(detail=True, methods=['get'])
     def history(self, request, pk=None):
         """
