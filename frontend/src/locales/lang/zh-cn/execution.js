@@ -97,6 +97,8 @@ export default {
   // Filters
   selectProject: '选择项目',
   selectStatus: '选择状态',
+  filterByModule: '模块筛选',
+  allModules: '全部模块',
   filterActive: '激活',
   filterClosed: '已关闭',
 

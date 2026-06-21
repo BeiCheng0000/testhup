@@ -97,6 +97,8 @@ export default {
   // Filters
   selectProject: 'Select Project',
   selectStatus: 'Select Status',
+  filterByModule: 'Filter by Module',
+  allModules: 'All Modules',
   filterActive: 'Active',
   filterClosed: 'Closed',
 

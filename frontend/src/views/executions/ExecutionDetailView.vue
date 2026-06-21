@@ -98,10 +98,34 @@
           </el-button>
         </div>
 
+        <!-- 筛选条件行 -->
+        <div class="filter-bar">
+          <el-select
+            v-model="selectedModule"
+            :placeholder="$t('execution.filterByModule')"
+            clearable
+            size="default"
+            style="width: 180px"
+            @change="handleModuleFilterChange">
+            <el-option
+              :label="$t('execution.allModules')"
+              value="" />
+            <el-option
+              v-for="mod in getRunModules(run.run_cases)"
+              :key="mod"
+              :label="mod"
+              :value="mod" />
+          </el-select>
+          <span v-if="selectedModule && run.run_cases" class="filter-result">
+            {{ $t('execution.filterByModule') }}: <strong>{{ selectedModule }}</strong>
+            ({{ getFilteredCases(run.run_cases).length }} {{ $t('execution.total') }})
+          </span>
+        </div>
+
         <!-- 优化的用例表格 -->
         <el-table
           ref="tableRef"
-          :data="paginatedCases(run.run_cases)"
+          :data="paginatedCases(getFilteredCases(run.run_cases))"
           style="width: 100%"
           class="execution-table"
           @selection-change="handleSelectionChange"
@@ -222,7 +246,7 @@
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
-            :total="run.run_cases.length"
+            :total="getFilteredCases(run.run_cases).length"
             layout="total, sizes, prev, pager, next, jumper"
             @current-change="handlePageChange"
             @size-change="handleSizeChange">
@@ -347,6 +371,7 @@ const editDialogVisible = ref(false)
 const editForm = ref({ title: '', preconditions: '', steps: '', expected_result: '', priority: 'medium' })
 const editCurrentRow = ref(null)
 const editSaving = ref(false)
+const selectedModule = ref('')
 
 const formatRichText = (text) => {
   if (!text) return ''
@@ -517,6 +542,30 @@ const batchDeleteCases = async () => {
     }
   } finally {
     isDeleting.value = false
+  }
+}
+
+// 模块筛选
+const getRunModules = (cases) => {
+  if (!cases) return []
+  const modules = new Set()
+  cases.forEach(c => {
+    if (c.module) modules.add(c.module)
+  })
+  return Array.from(modules).sort()
+}
+
+const getFilteredCases = (cases) => {
+  if (!cases) return []
+  if (!selectedModule.value) return cases
+  return cases.filter(c => c.module === selectedModule.value)
+}
+
+const handleModuleFilterChange = () => {
+  currentPage.value = 1
+  selectedCases.value = []
+  if (tableRef.value) {
+    tableRef.value.clearSelection()
   }
 }
 
@@ -836,6 +885,23 @@ onMounted(() => {
   margin-bottom: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+/* 筛选条件 */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.filter-result {
+  font-size: 13px;
+  color: #606266;
+}
+
+.filter-result strong {
+  color: #409eff;
 }
 
 /* 表格样式 */
