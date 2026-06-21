@@ -42,8 +42,8 @@
     
     <div class="card-container">
       <div class="filter-bar">
-        <el-row :gutter="20">
-          <el-col :span="5">
+        <el-row :gutter="16">
+          <el-col :span="4">
             <el-input
               v-model="searchText"
               :placeholder="$t('testcase.searchPlaceholder')"
@@ -56,7 +56,7 @@
             </el-input>
           </el-col>
           <el-col :span="4">
-            <el-select v-model="projectFilter" :placeholder="$t('testcase.relatedProject')" clearable @change="handleFilter">
+            <el-select v-model="projectFilter" :placeholder="$t('testcase.relatedProject')" clearable @change="onProjectFilterChange">
               <el-option
                 v-for="project in projects"
                 :key="project.id"
@@ -65,12 +65,40 @@
               />
             </el-select>
           </el-col>
-          <el-col :span="3">
+          <el-col :span="4">
+            <el-select v-model="versionFilter" :placeholder="$t('testcase.versionFilter')" clearable @change="handleFilter" :disabled="!projectFilter">
+              <el-option
+                v-for="version in filterVersions"
+                :key="version.id"
+                :label="version.name"
+                :value="version.id"
+              />
+            </el-select>
+          </el-col>
+          <el-col :span="4">
+            <el-input
+              v-model="moduleFilter"
+              :placeholder="$t('testcase.moduleFilter')"
+              clearable
+              @input="handleSearch"
+            />
+          </el-col>
+          <el-col :span="4">
             <el-select v-model="priorityFilter" :placeholder="$t('testcase.priorityFilter')" clearable @change="handleFilter">
               <el-option :label="$t('testcase.low')" value="low" />
               <el-option :label="$t('testcase.medium')" value="medium" />
               <el-option :label="$t('testcase.high')" value="high" />
               <el-option :label="$t('testcase.critical')" value="critical" />
+            </el-select>
+          </el-col>
+          <el-col :span="4">
+            <el-select v-model="typeFilter" :placeholder="$t('testcase.selectTestType')" clearable @change="handleFilter">
+              <el-option :label="$t('testcase.functional')" value="functional" />
+              <el-option :label="$t('testcase.integration')" value="integration" />
+              <el-option :label="$t('testcase.api')" value="api" />
+              <el-option :label="$t('testcase.ui')" value="ui" />
+              <el-option :label="$t('testcase.performance')" value="performance" />
+              <el-option :label="$t('testcase.security')" value="security" />
             </el-select>
           </el-col>
         </el-row>
@@ -85,24 +113,52 @@
           @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="55" />
           <el-table-column type="index" :label="$t('testcase.serialNumber')" width="80" :index="getSerialNumber" />
-          <el-table-column prop="module" :label="$t('testcase.module')" width="140">
+          <el-table-column prop="module" :label="$t('testcase.module')" width="120">
             <template #default="{ row }">
               {{ row.module || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="title" :label="$t('testcase.caseTitle')" min-width="250">
+          <el-table-column prop="title" :label="$t('testcase.caseTitle')" min-width="180">
             <template #default="{ row }">
               <el-link @click="goToTestCase(row.id)" type="primary">
                 {{ row.title }}
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="project.name" :label="$t('testcase.relatedProject')" width="150">
+          <el-table-column prop="preconditions" :label="$t('testcase.preconditions')" min-width="260">
+            <template #default="{ row }">
+              <span v-if="row.preconditions" v-html="formatRichText(row.preconditions)" class="rich-cell"></span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="steps" :label="$t('testcase.steps')" min-width="300">
+            <template #default="{ row }">
+              <span v-if="row.steps" v-html="formatRichText(row.steps)" class="rich-cell"></span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="expected_result" :label="$t('testcase.expectedResult')" min-width="300">
+            <template #default="{ row }">
+              <span v-if="row.expected_result" v-html="formatRichText(row.expected_result)" class="rich-cell"></span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="priority" :label="$t('testcase.priority')" width="80">
+            <template #default="{ row }">
+              <el-tag :class="`priority-tag ${row.priority}`">{{ getPriorityText(row.priority) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="created_at" :label="$t('testcase.createdAt')" width="150">
+            <template #default="{ row }">
+              {{ formatDate(row.created_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="project.name" :label="$t('testcase.relatedProject')" width="130" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.project?.name || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="versions" :label="$t('testcase.relatedVersions')" width="200">
+          <el-table-column prop="versions" :label="$t('testcase.relatedVersions')" width="140">
             <template #default="{ row }">
               <div v-if="row.versions && row.versions.length > 0" class="version-tags">
                 <el-tag 
@@ -121,22 +177,6 @@
                 </el-tooltip>
               </div>
               <span v-else class="no-version">{{ $t('testcase.noVersion') }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="priority" :label="$t('testcase.priority')" width="100">
-            <template #default="{ row }">
-              <el-tag :class="`priority-tag ${row.priority}`">{{ getPriorityText(row.priority) }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="test_type" :label="$t('testcase.testType')" width="120">
-            <template #default="{ row }">
-              {{ getTypeText(row.test_type) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="author.username" :label="$t('testcase.author')" width="120" />
-          <el-table-column prop="created_at" :label="$t('testcase.createdAt')" width="180">
-            <template #default="{ row }">
-              {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
           <el-table-column :label="$t('project.actions')" width="150" fixed="right">
@@ -323,7 +363,11 @@ const pageSize = ref(15)
 const total = ref(0)
 const searchText = ref('')
 const projectFilter = ref('')
+const versionFilter = ref('')
+const moduleFilter = ref('')
 const priorityFilter = ref('')
+const typeFilter = ref('')
+const filterVersions = ref([])
 const selectedTestCases = ref([])
 const isDeleting = ref(false)
 const importDialogVisible = ref(false)
@@ -353,7 +397,10 @@ const fetchTestCases = async () => {
       page_size: pageSize.value,
       search: searchText.value,
       project: projectFilter.value,
-      priority: priorityFilter.value
+      version: versionFilter.value,
+      module: moduleFilter.value,
+      priority: priorityFilter.value,
+      test_type: typeFilter.value
     }
     const response = await api.get('/testcases/', { params })
     testcases.value = response.data.results || []
@@ -373,6 +420,25 @@ const handleSearch = () => {
 const handleFilter = () => {
   currentPage.value = 1
   fetchTestCases()
+}
+
+const onProjectFilterChange = (projectId) => {
+  versionFilter.value = ''
+  filterVersions.value = []
+  if (projectId) {
+    fetchFilterVersions(projectId)
+  }
+  handleFilter()
+}
+
+const fetchFilterVersions = async (projectId) => {
+  try {
+    const response = await api.get(`/versions/projects/${projectId}/versions/`)
+    filterVersions.value = response.data || []
+  } catch (error) {
+    console.error('Fetch filter versions failed:', error)
+    filterVersions.value = []
+  }
 }
 
 const handlePageChange = () => {
@@ -494,6 +560,19 @@ const getVersionsTooltip = (versions) => {
   return versions.map(v => v.name + (v.is_baseline ? ' (' + t('testcase.baseline') + ')' : '')).join('、')
 }
 
+// 格式化富文本内容：换行显示 + 自动识别序号分行
+const formatRichText = (text) => {
+  if (!text) return ''
+  let result = text
+  // 1. 将 \n 转换为 <br/>
+  result = result.replace(/\r?\n/g, '<br/>')
+  // 2. 如果没有 <br/> 标签，尝试自动识别序号分行（如 1.xxx2.xxx -> 1.xxx<br/>2.xxx）
+  if (!/<br/i.test(result)) {
+    result = result.replace(/([。！？”"）\)\u4e00-\u9fff\w])(\d+)[\.\、](?=\s*\D)/g, '$1<br/>$2.')
+  }
+  return result
+}
+
 // 将HTML的<br>标签转换为换行符（用于Excel导出）
 const convertBrToNewline = (text) => {
   if (!text) return ''
@@ -524,7 +603,10 @@ const exportToExcel = async () => {
             page_size: pageSize,
             search: searchText.value,
             project: projectFilter.value,
-            priority: priorityFilter.value
+            version: versionFilter.value,
+            module: moduleFilter.value,
+            priority: priorityFilter.value,
+            test_type: typeFilter.value
           }
         })
 
@@ -946,6 +1028,21 @@ onMounted(() => {
   color: #909399;
   font-size: 12px;
   font-style: italic;
+}
+
+.text-muted {
+  color: #c0c4cc;
+}
+
+.rich-cell {
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: normal;
+  display: block;
+}
+
+:deep(.el-table__body-wrapper .cell) {
+  word-break: break-word;
 }
 
 @media (max-width: 1200px) {

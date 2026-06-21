@@ -36,7 +36,7 @@ class TestCaseListCreateView(generics.ListCreateAPIView):
     pagination_class = TestCasePagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['priority', 'test_type', 'project']
-    search_fields = ['title', 'description']
+    search_fields = ['title', 'description', 'module', 'preconditions', 'steps', 'expected_result']
     ordering_fields = ['created_at', 'updated_at', 'priority']
     ordering = ['-created_at']
     
@@ -48,13 +48,25 @@ class TestCaseListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         accessible_projects = get_user_accessible_projects(user)
-        return TestCase.objects.filter(
+        queryset = TestCase.objects.filter(
             project__in=accessible_projects
         ).select_related(
             'author', 'assignee', 'project'
         ).prefetch_related(
             'versions'
         ).distinct()
+        
+        # 按关联版本筛选
+        version = self.request.query_params.get('version', None)
+        if version:
+            queryset = queryset.filter(versions__id=version)
+        
+        # 按模块名称筛选（模糊匹配）
+        module = self.request.query_params.get('module', None)
+        if module:
+            queryset = queryset.filter(module__icontains=module)
+        
+        return queryset
     
     def get_user_accessible_projects(self, user):
         """获取用户有权限访问的项目"""

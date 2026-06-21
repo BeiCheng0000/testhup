@@ -59,7 +59,7 @@ export default {
     security: '安全测试',
 
     // Placeholders
-    searchPlaceholder: '搜索用例标题',
+    searchPlaceholder: '搜索用例标题/描述/模块/步骤',
     caseTitlePlaceholder: '请输入测试用例标题',
     modulePlaceholder: '请输入模块名称',
     caseDescriptionPlaceholder: '请输入用例描述',
@@ -72,6 +72,8 @@ export default {
     stepsPlaceholder: '请输入详细的操作步骤，如：\n1. 打开登录页面\n2. 输入用户名和密码\n3. 点击登录按钮\n4. 验证登录结果',
     expectedResultPlaceholder: '请输入整体预期结果',
     priorityFilter: '优先级筛选',
+    versionFilter: '版本筛选',
+    moduleFilter: '模块筛选',
     statusFilter: '状态筛选',
     importDialogTitle: '导入测试用例',
     uploadTip: '请先下载模板，按模板填写后上传 .xlsx 文件',

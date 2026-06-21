@@ -131,18 +131,72 @@
     </div>
 
     <!-- 用例选择对话框 -->
-    <el-dialog v-model="testcaseSelectorVisible" :title="$t('reviewForm.testcaseSelectorTitle')" :close-on-click-modal="false" width="800px">
+    <el-dialog v-model="testcaseSelectorVisible" :title="$t('reviewForm.testcaseSelectorTitle')" :close-on-click-modal="false" width="1100px">
       <div class="testcase-selector-content">
-        <el-input
-          v-model="testcaseSearchInDialog"
-          :placeholder="$t('reviewForm.searchTestcases')"
-          @input="searchTestcasesInDialog"
-          clearable
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
+        <div class="testcase-dialog-filter-bar">
+          <el-row :gutter="12">
+            <el-col :span="5">
+              <el-input
+                v-model="testcaseSearchInDialog"
+                :placeholder="$t('reviewForm.searchTestcases')"
+                clearable
+              >
+                <template #prefix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
+            </el-col>
+            <el-col :span="5">
+              <el-select
+                v-model="testcaseDialogProjectFilter"
+                :placeholder="$t('testcase.relatedProject')"
+                clearable
+                @change="onTestcaseDialogProjectChange"
+              >
+                <el-option
+                  v-for="project in projects"
+                  :key="project.id"
+                  :label="project.name"
+                  :value="project.id"
+                />
+              </el-select>
+            </el-col>
+            <el-col :span="5">
+              <el-select
+                v-model="testcaseDialogVersionFilter"
+                :placeholder="$t('testcase.versionFilter')"
+                clearable
+                :disabled="!testcaseDialogProjectFilter"
+              >
+                <el-option
+                  v-for="version in testcaseDialogVersions"
+                  :key="version.id"
+                  :label="version.name"
+                  :value="version.id"
+                />
+              </el-select>
+            </el-col>
+            <el-col :span="5">
+              <el-input
+                v-model="testcaseDialogModuleFilter"
+                :placeholder="$t('testcase.moduleFilter')"
+                clearable
+              />
+            </el-col>
+            <el-col :span="4">
+              <el-select
+                v-model="testcaseDialogPriorityFilter"
+                :placeholder="$t('testcase.priorityFilter')"
+                clearable
+              >
+                <el-option :label="$t('testcase.low')" value="low" />
+                <el-option :label="$t('testcase.medium')" value="medium" />
+                <el-option :label="$t('testcase.high')" value="high" />
+                <el-option :label="$t('testcase.critical')" value="critical" />
+              </el-select>
+            </el-col>
+          </el-row>
+        </div>
 
         <el-table
           :data="filteredTestcases"
@@ -151,19 +205,35 @@
           class="testcase-table"
         >
           <el-table-column type="selection" width="55" />
-          <el-table-column prop="module" :label="$t('testcase.module')" width="120">
+          <el-table-column prop="module" :label="$t('testcase.module')" width="100">
             <template #default="{ row }">
               {{ row.module || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="title" :label="$t('reviewForm.testcaseTitle')" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="test_type" :label="$t('reviewForm.testType')" width="120" />
-          <el-table-column prop="priority" :label="$t('reviewForm.priority')" width="100">
+          <el-table-column prop="title" :label="$t('reviewForm.testcaseTitle')" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="preconditions" :label="$t('testcase.preconditions')" min-width="210">
+            <template #default="{ row }">
+              <span v-if="row.preconditions" v-html="formatRichText(row.preconditions)" class="rich-cell"></span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="steps" :label="$t('testcase.steps')" min-width="240">
+            <template #default="{ row }">
+              <span v-if="row.steps" v-html="formatRichText(row.steps)" class="rich-cell"></span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="expected_result" :label="$t('testcase.expectedResult')" min-width="240">
+            <template #default="{ row }">
+              <span v-if="row.expected_result" v-html="formatRichText(row.expected_result)" class="rich-cell"></span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="priority" :label="$t('reviewForm.priority')" width="90">
             <template #default="{ row }">
               <el-tag :class="`priority-tag ${row.priority}`">{{ getPriorityText(row.priority) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="author.username" :label="$t('reviewForm.author')" width="120" />
         </el-table>
       </div>
       <template #footer>
@@ -192,6 +262,11 @@ const saving = ref(false)
 const testcaseSelectorVisible = ref(false)
 const testcaseSearch = ref('')
 const testcaseSearchInDialog = ref('')
+const testcaseDialogProjectFilter = ref('')
+const testcaseDialogVersionFilter = ref('')
+const testcaseDialogModuleFilter = ref('')
+const testcaseDialogPriorityFilter = ref('')
+const testcaseDialogVersions = ref([])
 
 const projects = ref([])
 const projectUsers = ref([])
@@ -219,10 +294,43 @@ const rules = computed(() => ({
 }))
 
 const filteredTestcases = computed(() => {
-  if (!testcaseSearchInDialog.value) return testcases.value
-  return testcases.value.filter(tc =>
-    tc.title.toLowerCase().includes(testcaseSearchInDialog.value.toLowerCase())
-  )
+  let result = testcases.value
+  
+  // 搜索过滤
+  if (testcaseSearchInDialog.value) {
+    const kw = testcaseSearchInDialog.value.toLowerCase()
+    result = result.filter(tc =>
+      tc.title.toLowerCase().includes(kw) ||
+      (tc.module && tc.module.toLowerCase().includes(kw)) ||
+      (tc.preconditions && tc.preconditions.toLowerCase().includes(kw)) ||
+      (tc.steps && tc.steps.toLowerCase().includes(kw))
+    )
+  }
+  
+  // 项目筛选
+  if (testcaseDialogProjectFilter.value) {
+    result = result.filter(tc => tc.project?.id === testcaseDialogProjectFilter.value)
+  }
+  
+  // 版本筛选
+  if (testcaseDialogVersionFilter.value) {
+    result = result.filter(tc => 
+      tc.versions && tc.versions.some(v => v.id === testcaseDialogVersionFilter.value)
+    )
+  }
+  
+  // 模块筛选
+  if (testcaseDialogModuleFilter.value) {
+    const mf = testcaseDialogModuleFilter.value.toLowerCase()
+    result = result.filter(tc => tc.module && tc.module.toLowerCase().includes(mf))
+  }
+  
+  // 优先级筛选
+  if (testcaseDialogPriorityFilter.value) {
+    result = result.filter(tc => tc.priority === testcaseDialogPriorityFilter.value)
+  }
+  
+  return result
 })
 
 const fetchProjects = async () => {
@@ -331,7 +439,27 @@ const showTestcaseSelector = () => {
     ElMessage.warning(t('reviewForm.selectProjectFirst'))
     return
   }
+  // 重置对话框筛选
+  testcaseSearch.value = ''
+  testcaseSearchInDialog.value = ''
+  testcaseDialogProjectFilter.value = ''
+  testcaseDialogVersionFilter.value = ''
+  testcaseDialogModuleFilter.value = ''
+  testcaseDialogPriorityFilter.value = ''
+  testcaseDialogVersions.value = []
   testcaseSelectorVisible.value = true
+}
+
+const onTestcaseDialogProjectChange = (projectId) => {
+  testcaseDialogVersionFilter.value = ''
+  testcaseDialogVersions.value = []
+  if (projectId) {
+    api.get(`/versions/projects/${projectId}/versions/`).then(res => {
+      testcaseDialogVersions.value = res.data || []
+    }).catch(() => {
+      testcaseDialogVersions.value = []
+    })
+  }
 }
 
 const handleTestcaseSelection = (selection) => {
@@ -414,6 +542,15 @@ const getPriorityText = (priority) => {
   return textMap[priority] || priority
 }
 
+const formatRichText = (text) => {
+  if (!text) return ''
+  let result = text.replace(/\r?\n/g, '<br/>')
+  if (!/<br/i.test(result)) {
+    result = result.replace(/([。！？”"）\)\u4e00-\u9fff\w])(\d+)[\.\、](?=\s*\D)/g, '$1<br/>$2.')
+  }
+  return result
+}
+
 const findMatchingTemplate = (review, templateList) => {
   if (!templateList || templateList.length === 0) return null
 
@@ -492,10 +629,6 @@ const searchTestcases = () => {
   // 搜索用例的逻辑
 }
 
-const searchTestcasesInDialog = () => {
-  // 在对话框中搜索用例的逻辑
-}
-
 onMounted(async () => {
   await fetchProjects()
   fetchProjectUsers() // 页面加载时就获取所有用户
@@ -562,8 +695,19 @@ onMounted(async () => {
 }
 
 .testcase-selector-content {
-  .el-input {
+  .testcase-dialog-filter-bar {
     margin-bottom: 16px;
+  }
+  
+  .rich-cell {
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: normal;
+    display: block;
+  }
+  
+  :deep(.el-table__body-wrapper .cell) {
+    word-break: break-word;
   }
 }
 

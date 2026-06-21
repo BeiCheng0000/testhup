@@ -265,11 +265,19 @@
                 v-model="testcaseSelectorFilters.keyword"
                 :placeholder="$t('execution.testcaseKeywordPlaceholder')"
                 clearable
-                style="width: 220px"
+                style="width: 180px"
+              />
+            </el-form-item>
+            <el-form-item :label="$t('testcase.moduleFilter')">
+              <el-input
+                v-model="testcaseSelectorFilters.module"
+                :placeholder="$t('testcase.moduleFilter')"
+                clearable
+                style="width: 140px"
               />
             </el-form-item>
             <el-form-item :label="$t('execution.testcasePriority')">
-              <el-select v-model="testcaseSelectorFilters.priority" clearable style="width: 160px">
+              <el-select v-model="testcaseSelectorFilters.priority" clearable style="width: 140px">
                 <el-option :label="$t('execution.allPriorities')" value="" />
                 <el-option :label="$t('testcase.low')" value="low" />
                 <el-option :label="$t('testcase.medium')" value="medium" />
@@ -278,7 +286,7 @@
               </el-select>
             </el-form-item>
             <el-form-item :label="$t('execution.testcaseType')">
-              <el-select v-model="testcaseSelectorFilters.test_type" clearable style="width: 180px">
+              <el-select v-model="testcaseSelectorFilters.test_type" clearable style="width: 150px">
                 <el-option :label="$t('execution.allTypes')" value="" />
                 <el-option :label="$t('testcase.functional')" value="functional" />
                 <el-option :label="$t('testcase.integration')" value="integration" />
@@ -304,23 +312,23 @@
           max-height="420"
         >
           <el-table-column type="selection" width="55" :reserve-selection="true" />
-          <el-table-column :label="$t('execution.testcaseCode')" width="90">
+          <el-table-column prop="module" :label="$t('testcase.module')" width="110" show-overflow-tooltip>
             <template #default="{ row }">
-              {{ row.id }}
+              {{ row.module || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="title" :label="$t('execution.testcaseTitle')" min-width="420" show-overflow-tooltip />
-          <el-table-column prop="priority" :label="$t('execution.testcasePriority')" width="120">
+          <el-table-column prop="title" :label="$t('execution.testcaseTitle')" min-width="280" show-overflow-tooltip />
+          <el-table-column prop="priority" :label="$t('execution.testcasePriority')" width="80">
             <template #default="{ row }">
               <el-tag :class="`priority-tag ${row.priority}`">{{ getTestcasePriorityText(row.priority) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="test_type" :label="$t('execution.testcaseType')" width="140">
+          <el-table-column prop="test_type" :label="$t('execution.testcaseType')" width="120">
             <template #default="{ row }">
               {{ getTestcaseTypeText(row.test_type) }}
             </template>
           </el-table-column>
-          <el-table-column prop="project__name" :label="$t('execution.testcaseProject')" width="180" show-overflow-tooltip />
+          <el-table-column prop="project__name" :label="$t('execution.testcaseProject')" width="140" show-overflow-tooltip />
         </el-table>
       </div>
       <template #footer>
@@ -365,6 +373,7 @@ const testcaseTempSelectedIds = ref([])
 const isSyncingTestcaseSelectorSelection = ref(false)
 const testcaseSelectorFilters = reactive({
   keyword: '',
+  module: '',
   priority: '',
   test_type: ''
 })
@@ -523,10 +532,12 @@ const handleProjectChange = (selectedProjects) => {
 const testcaseSelectorList = computed(() => {
   return filteredTestcases.value.filter(item => {
     const keyword = testcaseSelectorFilters.keyword.trim().toLowerCase()
-    const matchKeyword = !keyword || item.title?.toLowerCase().includes(keyword)
+    const moduleFilter = testcaseSelectorFilters.module.trim().toLowerCase()
+    const matchKeyword = !keyword || item.title?.toLowerCase().includes(keyword) || (item.module && item.module.toLowerCase().includes(keyword))
+    const matchModule = !moduleFilter || (item.module && item.module.toLowerCase().includes(moduleFilter))
     const matchPriority = !testcaseSelectorFilters.priority || item.priority === testcaseSelectorFilters.priority
     const matchType = !testcaseSelectorFilters.test_type || item.test_type === testcaseSelectorFilters.test_type
-    return matchKeyword && matchPriority && matchType
+    return matchKeyword && matchModule && matchPriority && matchType
   })
 })
 
@@ -588,6 +599,7 @@ const confirmTestcaseSelection = () => {
 
 const resetTestcaseSelectorFilters = async () => {
   testcaseSelectorFilters.keyword = ''
+  testcaseSelectorFilters.module = ''
   testcaseSelectorFilters.priority = ''
   testcaseSelectorFilters.test_type = ''
   await syncDialogTableSelection()
