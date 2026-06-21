@@ -10,10 +10,12 @@ from rest_framework.views import APIView
 from .models import TestCase, TestCaseStep, TestCaseAttachment, TestCaseComment, TestCaseImportRecord
 from .serializers import (
     TestCaseSerializer, TestCaseListSerializer, TestCaseCreateSerializer, TestCaseUpdateSerializer,
-    TestCaseImportRecordListSerializer, TestCaseImportRecordDetailSerializer
+    TestCaseImportRecordListSerializer, TestCaseImportRecordDetailSerializer,
+    BatchDeleteSerializer, BatchUpdateSerializer
 )
 from apps.projects.models import Project
 from apps.projects.helpers import get_user_accessible_projects
+from apps.versions.models import Version
 from .services import TestCaseImportTemplateService, TestCaseExcelImportService
 from .tasks import import_testcases_from_excel
 
@@ -163,6 +165,7 @@ class TestCaseImportRecordListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         project_id = request.data.get('project_id')
         import_file = request.FILES.get('file')
+        version_ids_str = request.data.get('version_ids', '')
 
         if not project_id:
             return Response({'error': '请选择导入项目'}, status=status.HTTP_400_BAD_REQUEST)
@@ -171,11 +174,28 @@ class TestCaseImportRecordListCreateView(generics.ListCreateAPIView):
         if not import_file.name.lower().endswith('.xlsx'):
             return Response({'error': '仅支持 .xlsx 格式文件'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # 解析版本ID列表
+        try:
+            version_ids = [int(v.strip()) for v in str(version_ids_str).split(',') if v.strip()]
+        except (ValueError, TypeError):
+            return Response({'error': '版本ID格式错误'}, status=status.HTTP_400_BAD_REQUEST)
+
         accessible_projects = get_user_accessible_projects(request.user)
         try:
             project = accessible_projects.get(id=project_id)
         except Project.DoesNotExist:
             return Response({'error': '项目不存在或无权限访问'}, status=status.HTTP_403_FORBIDDEN)
+
+        # 校验所选版本是否属于该项目
+        if version_ids:
+            valid_version_ids = set(
+                Version.objects.filter(id__in=version_ids, projects=project)
+                .values_list('id', flat=True)
+            )
+            if len(valid_version_ids) != len(version_ids):
+                return Response({'error': '部分版本不属于所选项目'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            valid_version_ids = []
 
         record = TestCaseImportRecord.objects.create(
             import_no=TestCaseExcelImportService.generate_import_no(),
@@ -185,7 +205,7 @@ class TestCaseImportRecordListCreateView(generics.ListCreateAPIView):
             template_version='v1'
         )
 
-        celery_task = import_testcases_from_excel.delay(record.id)
+        celery_task = import_testcases_from_excel.delay(record.id, list(valid_version_ids))
         record.celery_task_id = celery_task.id
         record.save(update_fields=['celery_task_id', 'updated_at'])
 
@@ -224,3 +244,89 @@ class TestCaseImportFailureReportDownloadView(APIView):
             filename=record.failure_report_file.name.split('/')[-1],
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
+
+
+class TestCaseBatchDeleteView(APIView):
+    """批量删除测试用例"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = BatchDeleteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        ids = serializer.validated_data['ids']
+        accessible_projects = get_user_accessible_projects(request.user)
+
+        # 只删除用户有权限访问的项目下的用例
+        testcases = TestCase.objects.filter(
+            id__in=ids,
+            project__in=accessible_projects
+        )
+
+        deleted_count = testcases.count()
+        testcases.delete()
+
+        not_found_count = len(ids) - deleted_count
+        return Response({
+            'deleted_count': deleted_count,
+            'not_found_count': not_found_count,
+            'message': f'成功删除 {deleted_count} 个用例' + (f'，{not_found_count} 个用例无权限或不存在' if not_found_count > 0 else '')
+        })
+
+
+class TestCaseBatchUpdateView(APIView):
+    """批量修改测试用例（关联项目和版本）"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = BatchUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        ids = serializer.validated_data['ids']
+        project_id = serializer.validated_data.get('project_id')
+        version_ids = serializer.validated_data.get('version_ids')
+
+        accessible_projects = get_user_accessible_projects(request.user)
+
+        # 验证项目权限
+        if project_id:
+            try:
+                target_project = accessible_projects.get(id=project_id)
+            except Project.DoesNotExist:
+                return Response({'error': '目标项目不存在或无权限访问'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            target_project = None
+
+        # 验证版本
+        if version_ids is not None:
+            valid_version_ids = set(
+                Version.objects.filter(id__in=version_ids).values_list('id', flat=True)
+            )
+            if len(valid_version_ids) != len(version_ids):
+                return Response({'error': '部分版本ID不存在'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            valid_version_ids = None
+
+        # 只修改用户有权限访问的项目下的用例
+        testcases = TestCase.objects.filter(
+            id__in=ids,
+            project__in=accessible_projects
+        )
+
+        updated_count = 0
+        for tc in testcases:
+            if target_project:
+                tc.project = target_project
+            if valid_version_ids is not None:
+                tc.versions.set(valid_version_ids)
+            tc.save()
+            updated_count += 1
+
+        not_found_count = len(ids) - updated_count
+        return Response({
+            'updated_count': updated_count,
+            'not_found_count': not_found_count,
+            'message': f'成功修改 {updated_count} 个用例' + (f'，{not_found_count} 个用例无权限或不存在' if not_found_count > 0 else '')
+        })

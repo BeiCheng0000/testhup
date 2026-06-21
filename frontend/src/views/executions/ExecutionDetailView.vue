@@ -112,6 +112,11 @@
             :label="$t('execution.serialNumber')"
             width="80"
             :index="getSerialNumber" />
+          <el-table-column prop="module" :label="$t('testcase.module')" width="120">
+            <template #default="{ row }">
+              {{ row.module || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="testcase" :label="$t('execution.testCase')" min-width="250" />
           <el-table-column :label="$t('execution.executionStatus')" width="150">
             <template #default="scope">

@@ -23,6 +23,7 @@ class SimpleTestCaseSerializer(serializers.Serializer):
     test_type = serializers.CharField()
     priority = serializers.CharField()
     status = serializers.CharField()
+    module = serializers.CharField()
     author = SimpleUserSerializer()
 
 

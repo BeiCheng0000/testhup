@@ -6,6 +6,10 @@
 
     <div class="card-container" v-if="!loading">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form-item :label="$t('testcase.module')" prop="module">
+          <el-input v-model="form.module" :placeholder="$t('testcase.modulePlaceholder')" />
+        </el-form-item>
+
         <el-form-item :label="$t('testcase.caseTitle')" prop="title">
           <el-input v-model="form.title" :placeholder="$t('testcase.caseTitlePlaceholder')" />
         </el-form-item>
@@ -146,6 +150,7 @@ const projectVersions = ref([])
 
 const form = reactive({
   title: '',
+  module: '',
   description: '',
   project_id: null,
   priority: 'medium',
@@ -222,6 +227,7 @@ const fetchTestCase = async () => {
 
     // Fill form data
     form.title = testcase.title
+    form.module = testcase.module || ''
     form.description = testcase.description
     form.project_id = testcase.project?.id || null
     form.priority = testcase.priority

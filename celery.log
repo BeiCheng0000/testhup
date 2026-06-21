@@ -1,0 +1,32 @@
+[2026-06-21 10:44:44,942: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 10:44:44,944: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 10:44:45,952: INFO/MainProcess] mingle: all alone
+[2026-06-21 10:44:45,959: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 10:45:49,014: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 10:45:49,016: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 10:45:50,021: INFO/MainProcess] mingle: all alone
+[2026-06-21 10:45:50,027: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 10:45:59,817: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[58fe2110-0e95-436b-bbac-67ff9d9ddc3e] received
+[2026-06-21 10:46:20,595: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[58fe2110-0e95-436b-bbac-67ff9d9ddc3e] succeeded in 20.780999999959022s: {'record_id': 1, 'status': 'completed', 'success_count': 172, 'failed_count': 0}
+[2026-06-21 10:58:24,849: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 10:58:24,851: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 10:58:25,859: INFO/MainProcess] mingle: all alone
+[2026-06-21 10:58:25,868: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 11:00:06,931: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[a8dacc94-1136-44e3-94bc-d9b9cae03be4] received
+[2026-06-21 11:00:28,258: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[a8dacc94-1136-44e3-94bc-d9b9cae03be4] succeeded in 21.328000000095926s: {'record_id': 2, 'status': 'completed', 'success_count': 172, 'failed_count': 0}
+[2026-06-21 11:09:44,062: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 11:09:44,065: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 11:09:45,071: INFO/MainProcess] mingle: all alone
+[2026-06-21 11:09:45,079: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 11:11:37,491: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[30850944-780e-462a-adf7-0e4e89ba922d] received
+[2026-06-21 11:11:59,564: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[30850944-780e-462a-adf7-0e4e89ba922d] succeeded in 22.07799999997951s: {'record_id': 3, 'status': 'completed', 'success_count': 172, 'failed_count': 0}
+[2026-06-21 11:19:32,959: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 11:19:32,962: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 11:19:33,968: INFO/MainProcess] mingle: all alone
+[2026-06-21 11:19:33,979: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 11:29:33,108: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 11:29:33,111: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 11:29:34,116: INFO/MainProcess] mingle: all alone
+[2026-06-21 11:29:34,137: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 11:34:36,196: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[5dd63e3e-9c1e-47df-8f8f-a419405c47a4] received
+[2026-06-21 11:34:58,178: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[5dd63e3e-9c1e-47df-8f8f-a419405c47a4] succeeded in 21.984000000054948s: {'record_id': 4, 'status': 'completed', 'success_count': 171, 'failed_count': 0}

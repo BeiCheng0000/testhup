@@ -11,6 +11,7 @@
     <div class="card-container" v-if="testcase">
       <el-descriptions :column="2" border>
         <el-descriptions-item :label="$t('testcase.caseTitle')" :span="2">{{ testcase.title }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('testcase.module')">{{ testcase.module || '-' }}</el-descriptions-item>
         <el-descriptions-item :label="$t('testcase.priority')">
           <el-tag :class="`priority-tag ${testcase.priority}`">{{ getPriorityText(testcase.priority) }}</el-tag>
         </el-descriptions-item>

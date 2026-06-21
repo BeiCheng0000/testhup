@@ -13,7 +13,6 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from apps.users.models import User
-from apps.versions.models import Version
 
 from .models import TestCase, TestCaseImportRecord
 
@@ -34,38 +33,38 @@ class ImportSummary:
 
 class TestCaseImportTemplateService:
     HEADERS = [
+        '模块',
         '用例标题*',
         '前置条件',
         '操作步骤*',
         '预期结果*',
         '优先级',
         '测试类型',
-        '关联版本',
     ]
 
     SAMPLE_ROW = [
+        '登录模块',
         '用户登录成功校验',
         '用户已注册且账号状态正常',
         '1. 打开登录页\n2. 输入正确用户名和密码\n3. 点击登录按钮',
         '页面跳转到首页，并显示登录成功信息',
         '高',
         '功能测试',
-        'V1.0,V1.1',
     ]
 
     INSTRUCTIONS = [
         ['模板版本', TEMPLATE_VERSION],
         ['说明', '请勿修改表头名称，按模板字段填写并上传'],
         ['默认处理', '模板中未提供的字段将使用系统默认值：描述为空、状态=draft(草稿)、标签=[]、指派人为空'],
+        ['模块', '可选，用例所属模块名称'],
         ['用例标题*', '必填，测试用例标题，建议唯一且明确'],
         ['前置条件', '可选'],
         ['操作步骤*', '必填，支持多行文本'],
         ['预期结果*', '必填，支持多行文本'],
-        ['优先级', '可选，支持中文或英文：低/中/高/紧急 或 low/medium/high/critical；默认 medium(中)'],
+        ['优先级', '可选，支持中文/英文/级别：低/low/P3、中/medium/P2、高/high/P1、紧急/critical/P0；默认 medium(中)'],
         ['测试类型', '可选，支持中文或英文：功能测试/集成测试/API测试/UI测试/性能测试/安全测试 或 functional/integration/api/ui/performance/security；默认 functional(功能测试)'],
         ['中英文示例', '优先级示例：高 或 high；测试类型示例：功能测试 或 functional'],
-        ['关联版本', '可选，填写当前项目下的版本名称，多个版本用英文逗号分隔'],
-        ['关联项目', '上传时由页面选择，不需要在 Excel 中填写'],
+        ['关联项目和版本', '上传时由页面选择，不需要在 Excel 中填写'],
     ]
 
     @classmethod
@@ -90,7 +89,7 @@ class TestCaseImportTemplateService:
             for cell in row:
                 cell.alignment = Alignment(vertical='top', wrap_text=True)
 
-        column_widths = [24, 24, 40, 34, 14, 18, 22]
+        column_widths = [16, 24, 24, 40, 34, 14, 18]
         for idx, width in enumerate(column_widths, start=1):
             worksheet.column_dimensions[chr(64 + idx)].width = width
 
@@ -118,6 +117,11 @@ class TestCaseExcelImportService:
         'medium': 'medium', '中': 'medium',
         'high': 'high', '高': 'high',
         'critical': 'critical', '紧急': 'critical',
+        # 支持 P0-P3 优先级级别
+        'p0': 'critical',
+        'p1': 'high',
+        'p2': 'medium',
+        'p3': 'low',
     }
     STATUS_MAP = {
         'draft': 'draft', '草稿': 'draft',
@@ -134,6 +138,7 @@ class TestCaseExcelImportService:
     }
 
     HEADER_ALIASES = {
+        '模块': 'module',
         '用例标题*': 'title',
         '标题*': 'title',
         '前置条件': 'preconditions',
@@ -141,20 +146,19 @@ class TestCaseExcelImportService:
         '预期结果*': 'expected_result',
         '优先级': 'priority',
         '测试类型': 'test_type',
-        '关联版本': 'versions',
     }
     EXPECTED_HEADER_FIELDS = [
+        'module',
         'title',
         'preconditions',
         'steps',
         'expected_result',
         'priority',
         'test_type',
-        'versions',
     ]
 
     @classmethod
-    def import_record(cls, record: TestCaseImportRecord) -> ImportSummary:
+    def import_record(cls, record: TestCaseImportRecord, version_ids: list = None) -> ImportSummary:
         workbook = load_workbook(record.import_file.path)
         if TEMPLATE_SHEET_NAME not in workbook.sheetnames:
             raise ValueError(f'Excel 中缺少工作表: {TEMPLATE_SHEET_NAME}')
@@ -175,11 +179,6 @@ class TestCaseExcelImportService:
         skip_count = 0
         failure_details: List[dict] = []
 
-        version_map = {
-            version.name: version
-            for version in Version.objects.filter(projects=record.project).distinct()
-        }
-
         for index, row in enumerate(effective_rows, start=2):
             row_values = list(row[:len(header_fields)])
             row_data = {
@@ -187,7 +186,7 @@ class TestCaseExcelImportService:
                 for field, value in zip(header_fields, row_values)
             }
 
-            error_messages = cls._validate_row(row_data, version_map)
+            error_messages = cls._validate_row(row_data)
             if error_messages:
                 failed_count += 1
                 failure_details.append({
@@ -197,11 +196,10 @@ class TestCaseExcelImportService:
                 })
                 continue
 
-            version_names = cls._split_csv(row_data.get('versions'))
-
             with transaction.atomic():
                 testcase = TestCase.objects.create(
                     project=record.project,
+                    module=row_data.get('module', ''),
                     title=row_data['title'],
                     description='',
                     preconditions=row_data.get('preconditions', ''),
@@ -214,8 +212,8 @@ class TestCaseExcelImportService:
                     author=record.created_by,
                     assignee=None,
                 )
-                if version_names:
-                    testcase.versions.set([version_map[name].id for name in version_names])
+                if version_ids:
+                    testcase.versions.set(version_ids)
 
             success_count += 1
             record.progress = int(success_count / total_rows * 100) if total_rows else 100
@@ -261,7 +259,7 @@ class TestCaseExcelImportService:
         return f'IMP_{timezone.now().strftime("%Y%m%d%H%M%S")}_{uuid.uuid4().hex[:6].upper()}'
 
     @classmethod
-    def _validate_row(cls, row_data: Dict[str, str], version_map: Dict[str, Version]) -> List[str]:
+    def _validate_row(cls, row_data: Dict[str, str]) -> List[str]:
         errors = []
         if not row_data.get('title'):
             errors.append('标题不能为空')
@@ -271,17 +269,12 @@ class TestCaseExcelImportService:
             errors.append('预期结果不能为空')
 
         priority = row_data.get('priority', '')
-        if priority and priority.lower() not in cls.PRIORITY_MAP and priority not in cls.PRIORITY_MAP:
-            errors.append(f'优先级无效: {priority}')
+        if priority and priority.lower() not in cls.PRIORITY_MAP:
+            errors.append(f'优先级无效: {priority}，可选值: 低/中/高/紧急 或 low/medium/high/critical 或 P0/P1/P2/P3')
 
         test_type = row_data.get('test_type', '')
-        if test_type and test_type.lower() not in cls.TEST_TYPE_MAP and test_type not in cls.TEST_TYPE_MAP:
-            errors.append(f'测试类型无效: {test_type}')
-
-        version_names = cls._split_csv(row_data.get('versions'))
-        invalid_versions = [name for name in version_names if name not in version_map]
-        if invalid_versions:
-            errors.append(f'版本不存在: {", ".join(invalid_versions)}')
+        if test_type and test_type.lower() not in cls.TEST_TYPE_MAP:
+            errors.append(f'测试类型无效: {test_type}，可选值: 功能测试/集成测试/API测试/UI测试/性能测试/安全测试')
 
         return errors
 

@@ -6,7 +6,7 @@ from .services import TestCaseExcelImportService
 
 
 @shared_task(bind=True)
-def import_testcases_from_excel(self, record_id: int):
+def import_testcases_from_excel(self, record_id: int, version_ids: list = None):
     record = TestCaseImportRecord.objects.get(id=record_id)
     record.status = 'importing'
     record.progress = 5
@@ -15,7 +15,7 @@ def import_testcases_from_excel(self, record_id: int):
     record.save(update_fields=['status', 'progress', 'celery_task_id', 'error_message', 'updated_at'])
 
     try:
-        summary = TestCaseExcelImportService.import_record(record)
+        summary = TestCaseExcelImportService.import_record(record, version_ids or [])
         record.refresh_from_db()
         record.total_rows = summary.total_rows
         record.success_count = summary.success_count

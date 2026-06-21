@@ -5,6 +5,13 @@
       <div class="header-actions">
         <el-button
           v-if="selectedTestCases.length > 0"
+          type="warning"
+          @click="openBatchEditDialog">
+          <el-icon><Edit /></el-icon>
+          {{ $t('testcase.batchEdit') }} ({{ selectedTestCases.length }})
+        </el-button>
+        <el-button
+          v-if="selectedTestCases.length > 0"
           type="danger"
           @click="batchDeleteTestCases"
           :disabled="isDeleting">
@@ -78,6 +85,11 @@
           @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="55" />
           <el-table-column type="index" :label="$t('testcase.serialNumber')" width="80" :index="getSerialNumber" />
+          <el-table-column prop="module" :label="$t('testcase.module')" width="140">
+            <template #default="{ row }">
+              {{ row.module || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="title" :label="$t('testcase.caseTitle')" min-width="250">
             <template #default="{ row }">
               <el-link @click="goToTestCase(row.id)" type="primary">
@@ -169,12 +181,29 @@
             style="width: 100%"
             :placeholder="$t('testcase.selectImportProject')"
             filterable
+            @change="onImportProjectChange"
           >
             <el-option
               v-for="project in projects"
               :key="project.id"
               :label="project.name"
               :value="project.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('testcase.selectImportVersions')">
+          <el-select
+            v-model="importForm.versionIds"
+            style="width: 100%"
+            multiple
+            :placeholder="$t('testcase.selectImportVersionsPlaceholder')"
+            filterable
+          >
+            <el-option
+              v-for="version in importVersions"
+              :key="version.id"
+              :label="version.name + (version.is_baseline ? ' (' + $t('testcase.baseline') + ')' : '')"
+              :value="version.id"
             />
           </el-select>
         </el-form-item>
@@ -213,6 +242,64 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量修改对话框 -->
+    <el-dialog
+      v-model="batchEditDialogVisible"
+      :title="$t('testcase.batchEditTitle')"
+      width="560px"
+    >
+      <el-alert
+        :title="$t('testcase.batchEditTip')"
+        type="info"
+        :closable="false"
+        show-icon
+        class="import-alert"
+      />
+
+      <el-form label-width="100px" class="batch-edit-form">
+        <el-form-item :label="$t('testcase.relatedProject')">
+          <el-select
+            v-model="batchEditForm.projectId"
+            style="width: 100%"
+            :placeholder="$t('common.selectProject')"
+            filterable
+            clearable
+            @change="onBatchProjectChange"
+          >
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('testcase.relatedVersions')">
+          <el-select
+            v-model="batchEditForm.versionIds"
+            style="width: 100%"
+            multiple
+            :placeholder="$t('testcase.selectVersions')"
+            filterable
+          >
+            <el-option
+              v-for="version in batchEditVersions"
+              :key="version.id"
+              :label="version.name + (version.is_baseline ? ' (' + $t('testcase.baseline') + ')' : '')"
+              :value="version.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="batchEditDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="isBatchUpdating" @click="submitBatchUpdate">
+          {{ $t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -221,7 +308,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Download, Delete, Upload } from '@element-plus/icons-vue'
+import { Plus, Search, Download, Delete, Upload, Edit } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
@@ -243,7 +330,19 @@ const importDialogVisible = ref(false)
 const isCreatingImport = ref(false)
 const selectedImportFile = ref(null)
 const importForm = ref({
-  projectId: ''
+  projectId: '',
+  versionIds: []
+})
+
+const importVersions = ref([])
+
+// 批量修改
+const batchEditDialogVisible = ref(false)
+const isBatchUpdating = ref(false)
+const batchEditVersions = ref([])
+const batchEditForm = ref({
+  projectId: null,
+  versionIds: []
 })
 
 const fetchTestCases = async () => {
@@ -340,29 +439,15 @@ const batchDeleteTestCases = async () => {
     )
 
     isDeleting.value = true
-    let successCount = 0
-    let failCount = 0
+    const ids = selectedTestCases.value.map(tc => tc.id)
 
-    // 逐个删除选中的测试用例
-    for (const testcase of selectedTestCases.value) {
-      try {
-        await api.delete(`/testcases/${testcase.id}/`)
-        successCount++
-      } catch (error) {
-        console.error(`Delete test case ${testcase.id} failed:`, error)
-        failCount++
-      }
-    }
+    const response = await api.post('/testcases/batch-delete/', { ids })
+    const { deleted_count, not_found_count } = response.data
 
-    // 显示删除结果
-    if (successCount > 0) {
-      if (failCount > 0) {
-        ElMessage.success(t('testcase.batchDeletePartialSuccess', { successCount, failCount }))
-      } else {
-        ElMessage.success(t('testcase.batchDeleteSuccess', { successCount }))
-      }
+    if (not_found_count > 0) {
+      ElMessage.warning(t('testcase.batchDeletePartialSuccess', { successCount: deleted_count, failCount: not_found_count }))
     } else {
-      ElMessage.error(t('testcase.batchDeleteFailed'))
+      ElMessage.success(t('testcase.batchDeleteSuccess', { successCount: deleted_count }))
     }
 
     // 清空选择并重新加载列表
@@ -372,7 +457,7 @@ const batchDeleteTestCases = async () => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Batch delete failed:', error)
-      ElMessage.error(t('testcase.batchDeleteError') + ': ' + (error.message || t('common.error')))
+      ElMessage.error(t('testcase.batchDeleteError') + ': ' + (error.response?.data?.error || t('common.error')))
     }
   } finally {
     isDeleting.value = false
@@ -469,7 +554,7 @@ const exportToExcel = async () => {
 
     // 准备Excel数据
     const worksheetData = [
-      [t('testcase.excelNumber'), t('testcase.excelTitle'), t('testcase.excelProject'), t('testcase.excelVersions'), t('testcase.excelPreconditions'), t('testcase.excelSteps'), t('testcase.excelExpectedResult'), t('testcase.excelPriority'), t('testcase.excelTestType'), t('testcase.excelAuthor'), t('testcase.excelCreatedAt')]
+      [t('testcase.excelNumber'), t('testcase.excelModule'), t('testcase.excelTitle'), t('testcase.excelProject'), t('testcase.excelVersions'), t('testcase.excelPreconditions'), t('testcase.excelSteps'), t('testcase.excelExpectedResult'), t('testcase.excelPriority'), t('testcase.excelTestType'), t('testcase.excelAuthor'), t('testcase.excelCreatedAt')]
     ]
 
     testCasesToExport.forEach((testcase, index) => {
@@ -479,6 +564,7 @@ const exportToExcel = async () => {
 
       worksheetData.push([
         `TC${String(index + 1).padStart(3, '0')}`,
+        testcase.module || '',
         testcase.title || '',
         testcase.project?.name || '',
         versions,
@@ -498,6 +584,7 @@ const exportToExcel = async () => {
     // 设置列宽
     const colWidths = [
       { wch: 15 }, // Test case number
+      { wch: 20 }, // Module
       { wch: 30 }, // Case title
       { wch: 20 }, // Related project
       { wch: 25 }, // Related versions
@@ -600,6 +687,10 @@ const submitImport = async () => {
     ElMessage.warning(t('testcase.importProjectRequired'))
     return
   }
+  if (!importForm.value.versionIds || importForm.value.versionIds.length === 0) {
+    ElMessage.warning(t('testcase.importVersionRequired'))
+    return
+  }
   if (!selectedImportFile.value) {
     ElMessage.warning(t('testcase.importFileRequired'))
     return
@@ -607,6 +698,7 @@ const submitImport = async () => {
 
   const formData = new FormData()
   formData.append('project_id', importForm.value.projectId)
+  formData.append('version_ids', importForm.value.versionIds.join(','))
   formData.append('file', selectedImportFile.value)
 
   isCreatingImport.value = true
@@ -629,6 +721,107 @@ const submitImport = async () => {
 
 const goToImportRecords = () => {
   router.push('/ai-generation/testcases/import-records')
+}
+
+const onImportProjectChange = (projectId) => {
+  importForm.value.versionIds = []
+  if (projectId) {
+    fetchImportVersions(projectId)
+  } else {
+    importVersions.value = []
+  }
+}
+
+const fetchImportVersions = async (projectId) => {
+  try {
+    const response = await api.get(`/versions/projects/${projectId}/versions/`)
+    importVersions.value = response.data || []
+  } catch (error) {
+    console.error('Fetch import versions failed:', error)
+    importVersions.value = []
+  }
+}
+
+// 批量修改相关
+const openBatchEditDialog = () => {
+  if (selectedTestCases.value.length === 0) {
+    ElMessage.warning(t('testcase.selectFirst'))
+    return
+  }
+
+  // 默认显示第一个选中用例的参数
+  const first = selectedTestCases.value[0]
+  batchEditForm.value.projectId = first.project?.id || null
+  batchEditForm.value.versionIds = first.versions ? first.versions.map(v => v.id) : []
+
+  // 加载第一个用例所在项目的版本列表
+  if (first.project?.id) {
+    fetchVersionsForProject(first.project.id)
+  } else {
+    batchEditVersions.value = []
+  }
+
+  batchEditDialogVisible.value = true
+}
+
+const fetchVersionsForProject = async (projectId) => {
+  try {
+    const response = await api.get(`/versions/projects/${projectId}/versions/`)
+    batchEditVersions.value = response.data || []
+  } catch (error) {
+    console.error('Fetch versions failed:', error)
+    batchEditVersions.value = []
+  }
+}
+
+const onBatchProjectChange = (projectId) => {
+  // 切换项目时清空已选版本并重新加载
+  batchEditForm.value.versionIds = []
+  if (projectId) {
+    fetchVersionsForProject(projectId)
+  } else {
+    batchEditVersions.value = []
+  }
+}
+
+const submitBatchUpdate = async () => {
+  const { projectId, versionIds } = batchEditForm.value
+
+  // 检查是否至少有一个字段被修改
+  if (!projectId && (!versionIds || versionIds.length === 0)) {
+    ElMessage.warning('至少需要选择关联项目或关联版本中的一项')
+    return
+  }
+
+  isBatchUpdating.value = true
+  try {
+    const ids = selectedTestCases.value.map(tc => tc.id)
+    const payload = { ids }
+    if (projectId) {
+      payload.project_id = projectId
+    }
+    if (versionIds && versionIds.length > 0) {
+      payload.version_ids = versionIds
+    }
+
+    const response = await api.post('/testcases/batch-update/', payload)
+    const { updated_count, not_found_count } = response.data
+
+    if (not_found_count > 0) {
+      ElMessage.warning(`成功修改 ${updated_count} 个，${not_found_count} 个无权限或不存在`)
+    } else {
+      ElMessage.success(t('testcase.batchUpdateSuccess', { updatedCount: updated_count }))
+    }
+
+    batchEditDialogVisible.value = false
+    selectedTestCases.value = []
+    fetchTestCases()
+  } catch (error) {
+    console.error('Batch update failed:', error)
+    ElMessage.error(t('testcase.batchUpdateFailed') + ': ' + (error.response?.data?.error || t('common.error')))
+  } finally {
+    isBatchUpdating.value = false
+  }
 }
 
 const fetchProjects = async () => {
@@ -726,6 +919,10 @@ onMounted(() => {
   :deep(.el-upload-dragger) {
     width: 100%;
   }
+}
+
+.batch-edit-form {
+  margin-top: 16px;
 }
 
 .priority-tag {

@@ -151,6 +151,11 @@
           class="testcase-table"
         >
           <el-table-column type="selection" width="55" />
+          <el-table-column prop="module" :label="$t('testcase.module')" width="120">
+            <template #default="{ row }">
+              {{ row.module || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="title" :label="$t('reviewForm.testcaseTitle')" min-width="200" show-overflow-tooltip />
           <el-table-column prop="test_type" :label="$t('reviewForm.testType')" width="120" />
           <el-table-column prop="priority" :label="$t('reviewForm.priority')" width="100">

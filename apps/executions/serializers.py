@@ -12,20 +12,28 @@ class TestRunCaseHistorySerializer(serializers.ModelSerializer):
 
 class TestRunCaseSimpleSerializer(serializers.ModelSerializer):
     testcase = serializers.StringRelatedField()
+    module = serializers.SerializerMethodField()
     class Meta:
         model = TestRunCase
-        fields = ('id', 'testcase', 'status')
+        fields = ('id', 'testcase', 'module', 'status')
+    
+    def get_module(self, obj):
+        return obj.testcase.module if obj.testcase else ''
 
 class TestRunCaseDetailSerializer(serializers.ModelSerializer):
     testcase = serializers.StringRelatedField()
     executed_by = UserSimpleSerializer(read_only=True)
     history = TestRunCaseHistorySerializer(many=True, read_only=True)
+    module = serializers.SerializerMethodField()
     
     class Meta:
         model = TestRunCase
         fields = ('id', 'testcase', 'status', 'priority', 'actual_result', 'comments', 
                  'defects', 'elapsed_time', 'executed_by', 'executed_at', 'created_at', 
-                 'updated_at', 'history')
+                 'updated_at', 'history', 'module')
+    
+    def get_module(self, obj):
+        return obj.testcase.module if obj.testcase else ''
 
 class TestRunSerializer(serializers.ModelSerializer):
     run_cases = TestRunCaseSimpleSerializer(many=True, read_only=True)
@@ -69,6 +77,7 @@ class TestPlanDetailSerializer(serializers.ModelSerializer):
                     'title': testcase.title,
                     'priority': testcase.priority,
                     'test_type': testcase.test_type,
+                    'module': testcase.module,
                     'project__name': testcase.project.name if testcase.project else ''
                 }
         return list(testcase_map.values())

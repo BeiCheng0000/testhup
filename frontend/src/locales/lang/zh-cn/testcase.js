@@ -9,6 +9,12 @@ export default {
     // Actions
     newCase: '新建用例',
     batchDelete: '批量删除',
+    batchEdit: '批量修改',
+    batchEditTitle: '批量修改测试用例',
+    batchEditTip: '将修改选中用例的关联项目和版本，未选择的项保持原值不变',
+    batchUpdateSuccess: '成功修改 {updatedCount} 个测试用例',
+    batchUpdateFailed: '批量修改失败',
+    batchDeleteTip: '将一次性删除选中的用例，此操作不可恢复',
     exportExcel: '导出Excel',
     downloadImportTemplate: '下载导入模板',
     importCases: '导入用例',
@@ -31,6 +37,7 @@ export default {
     author: '作者',
     createdAt: '创建时间',
     serialNumber: '序号',
+    module: '模块',
 
     // Priority
     low: '低',
@@ -54,6 +61,7 @@ export default {
     // Placeholders
     searchPlaceholder: '搜索用例标题',
     caseTitlePlaceholder: '请输入测试用例标题',
+    modulePlaceholder: '请输入模块名称',
     caseDescriptionPlaceholder: '请输入用例描述',
     selectProject: '请选择项目',
     selectPriority: '请选择优先级',
@@ -69,6 +77,9 @@ export default {
     uploadTip: '请先下载模板，按模板填写后上传 .xlsx 文件',
     importProject: '导入项目',
     selectImportProject: '请选择导入项目',
+    selectImportVersions: '选择导入版本',
+    selectImportVersionsPlaceholder: '请选择导入版本（可多选）',
+    importVersionRequired: '请选择导入版本',
     selectImportFile: '请选择导入文件',
     selectedFile: '已选择文件',
     importRecordTitle: '测试用例导入记录',
@@ -141,6 +152,7 @@ export default {
 
     // Excel export
     excelNumber: '测试用例编号',
+    excelModule: '模块',
     excelTitle: '用例标题',
     excelProject: '关联项目',
     excelVersions: '关联版本',

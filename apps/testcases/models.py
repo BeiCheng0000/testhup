@@ -30,6 +30,7 @@ class TestCase(models.Model):
     
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='testcases')
     versions = models.ManyToManyField(Version, blank=True, related_name='testcases', verbose_name='关联版本')
+    module = models.CharField(max_length=200, blank=True, default='', verbose_name='模块')
     title = models.CharField(max_length=500, verbose_name='用例标题')
     description = models.TextField(blank=True, verbose_name='用例描述')
     preconditions = models.TextField(blank=True, verbose_name='前置条件')

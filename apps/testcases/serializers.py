@@ -51,7 +51,7 @@ class TestCaseListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'preconditions', 'steps', 'expected_result',
             'priority', 'test_type',
-            'author', 'assignee', 'project', 'versions', 'tags', 'created_at', 'updated_at'
+            'author', 'assignee', 'project', 'versions', 'module', 'tags', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -80,7 +80,7 @@ class TestCaseCreateSerializer(serializers.ModelSerializer):
         model = TestCase
         fields = [
             'title', 'description', 'preconditions', 'steps', 'expected_result',
-            'priority', 'test_type', 'tags', 'project_id', 'version_ids'
+            'priority', 'test_type', 'tags', 'module', 'project_id', 'version_ids'
         ]
     
     def create(self, validated_data):
@@ -109,7 +109,7 @@ class TestCaseUpdateSerializer(serializers.ModelSerializer):
         model = TestCase
         fields = [
             'title', 'description', 'preconditions', 'steps', 'expected_result',
-            'priority', 'test_type', 'tags', 'project_id', 'version_ids'
+            'priority', 'test_type', 'tags', 'module', 'project_id', 'version_ids'
         ]
     
     def update(self, instance, validated_data):
@@ -152,3 +152,28 @@ class TestCaseImportRecordDetailSerializer(TestCaseImportRecordListSerializer):
         if obj.failure_report_file:
             return obj.failure_report_file.url
         return None
+
+
+# ========== 批量操作序列化器 ==========
+
+class BatchDeleteSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+        help_text='要删除的用例ID列表'
+    )
+
+
+class BatchUpdateSerializer(serializers.Serializer):
+    ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+        help_text='要修改的用例ID列表'
+    )
+    project_id = serializers.IntegerField(required=False, allow_null=True, help_text='目标项目ID')
+    version_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=True,
+        help_text='目标版本ID列表'
+    )

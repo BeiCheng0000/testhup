@@ -31,6 +31,7 @@ export default {
     author: 'Author',
     createdAt: 'Created At',
     serialNumber: 'No.',
+    module: 'Module',
 
     // Priority
     low: 'Low',
@@ -53,6 +54,7 @@ export default {
 
     // Placeholders
     searchPlaceholder: 'Search case title',
+    modulePlaceholder: 'Enter module name',
     caseTitlePlaceholder: 'Enter test case title',
     caseDescriptionPlaceholder: 'Enter case description',
     selectProject: 'Select project',
@@ -141,6 +143,7 @@ export default {
 
     // Excel export
     excelNumber: 'Test Case ID',
+    excelModule: 'Module',
     excelTitle: 'Case Title',
     excelProject: 'Related Project',
     excelVersions: 'Related Versions',
