@@ -37,6 +37,7 @@ export default {
     priorityCritical: '紧急',
 
     // Actions
+    execute: '开始评审',
     detail: '详情',
     review: '评审',
     edit: '编辑',
@@ -214,13 +215,15 @@ export default {
     reviewTemplate: '评审模板',
     selectTemplate: '可选择评审模板',
 
-    // Testcase Selector Dialog
+    // Testcase Selector
     testcaseSelectorTitle: '选择测试用例',
-    testcaseTitle: '用例标题',
-    testType: '测试类型',
-    author: '作者',
-    confirm: '确定',
-    cancel: '取消',
+    selectVersion: '选择迭代',
+    selectVersionPlaceholder: '请选择迭代（可选）',
+    selectModules: '选择模块',
+    selectModulesPlaceholder: '请选择模块（可多选）',
+    totalCases: '总计用例',
+    cases: '个用例',
+    emptyTestcasesTip: '请选择模块以包含其所有用例',
 
     // Validation
     titleRequired: '请输入评审标题',
@@ -296,5 +299,74 @@ export default {
     fetchListFailed: '获取模板列表失败',
     fetchProjectsFailed: '获取项目列表失败',
     fetchUsersFailed: '获取用户列表失败'
+  },
+
+  // 评审执行页面
+  reviewExecution: {
+    title: '评审执行',
+    back: '返回',
+    noProject: '无关联项目',
+
+    // 统计
+    total: '总用例数',
+    passed: '通过',
+    failedStatus: '不通过',
+    unreviewed: '未评审',
+    progress: '评审进度',
+
+    // 表格
+    serialNumber: '序号',
+    caseTitle: '用例标题',
+    status: '评审状态',
+    comments: '评审备注',
+    reviewedBy: '评审人',
+    reviewedAt: '评审时间',
+    actions: '操作',
+
+    // 操作按钮
+    viewHistory: '评审历史',
+    editCase: '修改用例',
+    addComment: '评审备注',
+
+    // 状态
+    statusUpdateSuccess: '评审状态更新成功',
+    statusUpdateFailed: '评审状态更新失败',
+
+    // 备注
+    commentsUpdateSuccess: '评审备注更新成功',
+    commentsUpdateFailed: '评审备注更新失败',
+    commentsPlaceholder: '请输入评审备注',
+
+    // 修改用例
+    editCaseTitle: '修改用例数据',
+    caseUpdateSuccess: '用例数据更新成功',
+    caseUpdateFailed: '用例数据更新失败',
+
+    // 历史
+    reviewHistory: '评审历史',
+    fetchHistoryFailed: '获取评审历史失败',
+
+    // 筛选
+    filterByModule: '模块筛选',
+    allModules: '全部模块',
+
+    // 批量操作
+    batchDelete: '批量删除',
+    batchUpdateStatus: '批量状态',
+    batchSetPassed: '批量通过',
+    batchSetFailed: '批量不通过',
+    batchSetUnreviewed: '批量重置未评审',
+    batchSelected: '已选',
+    batchStatusConfirm: '确定将选中的 {count} 条用例状态改为 "{status}" 吗？',
+    batchStatusSuccess: '成功更新 {count} 条用例状态为 "{status}"',
+    batchStatusFailed: '批量状态更新失败',
+    batchDeleteConfirm: '确定要删除选中的 {count} 条评审用例吗？',
+    batchDeleteSuccess: '成功删除 {successCount} 条，失败 {failCount} 条',
+    batchDeleteFailed: '批量删除失败',
+    selectCasesFirst: '请先选择要删除的用例',
+
+    // 消息
+    fetchFailed: '获取评审信息失败',
+    fetchCasesFailed: '获取评审用例列表失败'
   }
 }

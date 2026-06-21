@@ -25,6 +25,7 @@ class TestCaseReview(models.Model):
     title = models.CharField(max_length=500, verbose_name='评审标题')
     description = models.TextField(blank=True, verbose_name='评审描述')
     projects = models.ManyToManyField(Project, related_name='reviews', verbose_name='关联项目')
+    modules = models.JSONField(default=list, blank=True, verbose_name='评审模块')
     testcases = models.ManyToManyField(TestCase, related_name='reviews', verbose_name='评审用例')
     creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_reviews', verbose_name='创建人')
     reviewers = models.ManyToManyField(User, through='ReviewAssignment', related_name='assigned_reviews', verbose_name='评审人员')
@@ -109,3 +110,43 @@ class ReviewTemplate(models.Model):
         verbose_name = '评审模板'
         verbose_name_plural = '评审模板'
         ordering = ['-created_at']
+
+
+class ReviewCase(models.Model):
+    """逐用例评审结果（中间表）"""
+    STATUS_CHOICES = [
+        ('unreviewed', '未评审'),
+        ('passed', '通过'),
+        ('failed', '不通过'),
+    ]
+    
+    review = models.ForeignKey(TestCaseReview, on_delete=models.CASCADE, related_name='review_cases', verbose_name='关联评审')
+    testcase = models.ForeignKey(TestCase, on_delete=models.CASCADE, verbose_name='测试用例')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unreviewed', verbose_name='评审状态')
+    comments = models.TextField(blank=True, verbose_name='备注')
+    reviewed_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, verbose_name='评审人')
+    reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='评审时间')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    
+    class Meta:
+        db_table = 'review_cases'
+        unique_together = ['review', 'testcase']
+        verbose_name = '评审用例'
+        verbose_name_plural = '评审用例'
+        ordering = ['testcase__id']
+
+
+class ReviewCaseHistory(models.Model):
+    """评审用例历史记录"""
+    review_case = models.ForeignKey(ReviewCase, on_delete=models.CASCADE, related_name='history', verbose_name='评审用例')
+    status = models.CharField(max_length=20, choices=ReviewCase.STATUS_CHOICES, verbose_name='评审状态')
+    comments = models.TextField(blank=True, verbose_name='备注')
+    reviewed_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='评审人')
+    reviewed_at = models.DateTimeField(default=timezone.now, verbose_name='评审时间')
+    
+    class Meta:
+        db_table = 'review_case_history'
+        verbose_name = '评审用例历史'
+        verbose_name_plural = '评审用例历史'
+        ordering = ['-reviewed_at']

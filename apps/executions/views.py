@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from django.utils import timezone
 from django.db import transaction
 from django.db import models
+from django.db.models import Count, Q
 from .models import TestPlan, TestRun, TestRunCase, TestRunCaseHistory
 from apps.testcases.models import TestCase
 from apps.projects.models import Project
@@ -262,7 +263,135 @@ class TestRunCaseViewSet(viewsets.ModelViewSet):
         run_case.executed_at = timezone.now()
         run_case.save()
         
+        # 更新关联的测试执行状态
+        self._update_run_status(run_case.test_run)
+        
         return Response(TestRunCaseDetailSerializer(run_case).data)
+
+    @action(detail=False, methods=['post'], url_path='batch_update_status')
+    def batch_update_status(self, request):
+        """批量更新测试执行用例状态（优化版：bulk_create + update + 聚合统计）"""
+        ids = request.data.get('ids', [])
+        new_status = request.data.get('status')
+        comments = request.data.get('comments', '')
+        
+        if not ids:
+            return Response({'error': '请提供要更新的用例ID列表'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_status not in dict(TestRunCase.STATUS_CHOICES):
+            return Response({'error': '无效的执行状态'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        now = timezone.now()
+        
+        # 先获取 run_case 的 id 和 test_run_id 用于创建历史和后续聚合
+        run_cases_qs = TestRunCase.objects.filter(id__in=ids).values('id', 'test_run_id')
+        run_cases = list(run_cases_qs)
+        if not run_cases:
+            return Response({'error': '未找到匹配的执行用例'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # 1. 批量创建历史记录（1条SQL）
+        history_objects = [
+            TestRunCaseHistory(
+                run_case_id=rc['id'],
+                status=new_status,
+                actual_result='',
+                comments=comments,
+                executed_by=request.user,
+                executed_at=now
+            )
+            for rc in run_cases
+        ]
+        TestRunCaseHistory.objects.bulk_create(history_objects)
+        
+        # 2. 批量更新状态（1条SQL）
+        updated_count = TestRunCase.objects.filter(id__in=ids).update(
+            status=new_status,
+            comments=comments,
+            executed_by=request.user,
+            executed_at=now,
+            updated_at=now
+        )
+        
+        # 3. 收集受影响的 run_ids 并批量更新 TestRun 状态
+        run_ids = list(set(rc['test_run_id'] for rc in run_cases))
+        self._batch_update_run_statuses(run_ids)
+        
+        return Response({
+            'message': '批量状态更新完成',
+            'updated_count': updated_count,
+            'status': new_status
+        })
+    
+    def _batch_update_run_statuses(self, run_ids):
+        """批量更新多个 TestRun 的整体状态（聚合查询 + bulk_update）"""
+        if not run_ids:
+            return
+        
+        # 一次聚合查询获取所有 TestRun 的统计信息
+        stats = TestRunCase.objects.filter(test_run_id__in=run_ids).values('test_run_id').annotate(
+            total=Count('id'),
+            untested=Count('id', filter=Q(status='untested')),
+            tested=Count('id', filter=~Q(status='untested')),
+        )
+        
+        # 一次查询加载所有涉及的 TestRun
+        runs_map = TestRun.objects.in_bulk(
+            [s['test_run_id'] for s in stats], field_name='id'
+        )
+        
+        now = timezone.now()
+        runs_to_update = []
+        
+        for stat in stats:
+            run_id = stat['test_run_id']
+            test_run = runs_map.get(run_id)
+            if not test_run:
+                continue
+            
+            total = stat['total']
+            untested = stat['untested']
+            tested = stat['tested']
+            
+            if total == 0:
+                test_run.status = 'untested'
+            elif untested == total:
+                test_run.status = 'untested'
+                test_run.completed_at = None
+            elif tested >= total:
+                test_run.status = 'completed'
+                test_run.completed_at = now
+            else:
+                test_run.status = 'in_progress'
+                test_run.started_at = test_run.started_at or now
+                test_run.completed_at = None
+            
+            test_run.updated_at = now
+            runs_to_update.append(test_run)
+        
+        if runs_to_update:
+            TestRun.objects.bulk_update(
+                runs_to_update, 
+                ['status', 'started_at', 'completed_at', 'updated_at']
+            )
+    
+    def _update_run_status(self, test_run):
+        """根据执行用例状态更新 TestRun 的整体状态（单个用）"""
+        stats = test_run.progress_stats
+        total = stats['total']
+        if total == 0:
+            test_run.status = 'untested'
+            test_run.save()
+            return
+        
+        if stats['untested'] == total:
+            test_run.status = 'untested'
+        elif stats['tested'] >= total:
+            test_run.status = 'completed'
+            test_run.completed_at = timezone.now()
+        else:
+            test_run.status = 'in_progress'
+            test_run.started_at = test_run.started_at or timezone.now()
+        
+        test_run.save()
 
     @action(detail=True, methods=['patch'])
     def update_testcase(self, request, pk=None):

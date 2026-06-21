@@ -9,6 +9,8 @@ export default {
   // Actions
   newPlan: 'New Test Plan',
   batchDelete: 'Batch Delete',
+  batchUpdateStatus: 'Batch Status',
+  batchSelected: 'Selected',
   viewExecution: 'View Execution',
   createPlan: 'Create',
   updatePlan: 'Save',
@@ -127,6 +129,9 @@ export default {
   batchDeletePartialSuccess: 'Successfully deleted {successCount} test plans, {failCount} failed',
   batchDeleteCasesPartialSuccess: 'Successfully deleted {successCount} cases, {failCount} failed',
   batchDeleteFailed: 'Delete failed',
+  batchStatusConfirm: 'Are you sure to change {count} cases execution status to "{status}"?',
+  batchStatusSuccess: 'Updated {count} cases to "{status}"',
+  batchStatusFailed: 'Batch status update failed',
   toggleStatusConfirm: 'Are you sure to {action} this test plan?',
   toggleStatusSuccess: '{action} successful',
   toggleStatusFailed: 'Operation failed',

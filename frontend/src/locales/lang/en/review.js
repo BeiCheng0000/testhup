@@ -37,6 +37,7 @@ export default {
     priorityCritical: 'Critical',
 
     // Actions
+    execute: 'Start Review',
     detail: 'Detail',
     review: 'Review',
     edit: 'Edit',
@@ -214,13 +215,15 @@ export default {
     reviewTemplate: 'Review Template',
     selectTemplate: 'Select review template (optional)',
 
-    // Testcase Selector Dialog
+    // Testcase Selector
     testcaseSelectorTitle: 'Select Test Cases',
-    testcaseTitle: 'Test Case Title',
-    testType: 'Test Type',
-    author: 'Author',
-    confirm: 'Confirm',
-    cancel: 'Cancel',
+    selectVersion: 'Select Iteration',
+    selectVersionPlaceholder: 'Select iteration (optional)',
+    selectModules: 'Select Modules',
+    selectModulesPlaceholder: 'Select modules (multi)',
+    totalCases: 'Total Cases',
+    cases: 'cases',
+    emptyTestcasesTip: 'Select modules to include their test cases',
 
     // Validation
     titleRequired: 'Please enter review title',
@@ -296,5 +299,74 @@ export default {
     fetchListFailed: 'Failed to fetch template list',
     fetchProjectsFailed: 'Failed to fetch projects',
     fetchUsersFailed: 'Failed to fetch users'
+  },
+
+  // Review Execution Page
+  reviewExecution: {
+    title: 'Review Execution',
+    back: 'Back',
+    noProject: 'No Project',
+
+    // Stats
+    total: 'Total Cases',
+    passed: 'Passed',
+    failedStatus: 'Failed',
+    unreviewed: 'Unreviewed',
+    progress: 'Review Progress',
+
+    // Table
+    serialNumber: '#',
+    caseTitle: 'Case Title',
+    status: 'Review Status',
+    comments: 'Review Notes',
+    reviewedBy: 'Reviewer',
+    reviewedAt: 'Reviewed At',
+    actions: 'Actions',
+
+    // Action Buttons
+    viewHistory: 'Review History',
+    editCase: 'Edit Case',
+    addComment: 'Review Notes',
+
+    // Status
+    statusUpdateSuccess: 'Review status updated',
+    statusUpdateFailed: 'Failed to update review status',
+
+    // Comments
+    commentsUpdateSuccess: 'Review notes updated',
+    commentsUpdateFailed: 'Failed to update review notes',
+    commentsPlaceholder: 'Enter review notes',
+
+    // Edit Case
+    editCaseTitle: 'Edit Case Data',
+    caseUpdateSuccess: 'Case data updated',
+    caseUpdateFailed: 'Failed to update case data',
+
+    // History
+    reviewHistory: 'Review History',
+    fetchHistoryFailed: 'Failed to fetch review history',
+
+    // Filter
+    filterByModule: 'Filter by Module',
+    allModules: 'All Modules',
+
+    // Batch Operations
+    batchDelete: 'Batch Delete',
+    batchUpdateStatus: 'Batch Status',
+    batchSetPassed: 'Set Passed',
+    batchSetFailed: 'Set Failed',
+    batchSetUnreviewed: 'Reset Unreviewed',
+    batchSelected: 'Selected',
+    batchStatusConfirm: 'Are you sure to change {count} cases to "{status}"?',
+    batchStatusSuccess: 'Updated {count} cases to "{status}"',
+    batchStatusFailed: 'Batch status update failed',
+    batchDeleteConfirm: 'Are you sure to delete {count} selected review cases?',
+    batchDeleteSuccess: '{successCount} deleted, {failCount} failed',
+    batchDeleteFailed: 'Batch delete failed',
+    selectCasesFirst: 'Please select cases to delete first',
+
+    // Messages
+    fetchFailed: 'Failed to fetch review info',
+    fetchCasesFailed: 'Failed to fetch review case list'
   }
 }

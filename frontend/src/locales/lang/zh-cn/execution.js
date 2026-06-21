@@ -9,6 +9,8 @@ export default {
   // Actions
   newPlan: '新建测试计划',
   batchDelete: '批量删除',
+  batchUpdateStatus: '批量状态',
+  batchSelected: '已选',
   viewExecution: '查看执行',
   createPlan: '创建',
   updatePlan: '保存',
@@ -127,6 +129,9 @@ export default {
   batchDeletePartialSuccess: '成功删除 {successCount} 个测试计划，{failCount} 个失败',
   batchDeleteCasesPartialSuccess: '成功删除 {successCount} 个用例，{failCount} 个失败',
   batchDeleteFailed: '删除失败',
+  batchStatusConfirm: '确定将选中的 {count} 条用例执行状态改为 "{status}" 吗？',
+  batchStatusSuccess: '成功更新 {count} 条用例状态为 "{status}"',
+  batchStatusFailed: '批量状态更新失败',
   toggleStatusConfirm: '确定要{action}这个测试计划吗？',
   toggleStatusSuccess: '{action}成功',
   toggleStatusFailed: '操作失败',

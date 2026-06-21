@@ -113,6 +113,11 @@ const routes = [
                 component: () => import('@/views/reviews/ReviewForm.vue')
             },
             {
+                path: 'reviews/:id/execute',
+                name: 'ReviewExecution',
+                component: () => import('@/views/reviews/ReviewExecutionView.vue')
+            },
+            {
                 path: 'review-templates',
                 name: 'ReviewTemplates',
                 component: () => import('@/views/reviews/ReviewTemplateList.vue')

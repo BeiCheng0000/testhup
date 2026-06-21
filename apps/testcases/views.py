@@ -258,6 +258,51 @@ class TestCaseImportFailureReportDownloadView(APIView):
         )
 
 
+class TestCaseModuleStatsView(APIView):
+    """获取模块统计信息（按项目+版本）"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        project_id = request.query_params.get('project')
+        version_id = request.query_params.get('version')
+
+        if not project_id:
+            return Response({'error': 'project 参数必填'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        accessible_projects = get_user_accessible_projects(user)
+
+        try:
+            accessible_projects.get(id=project_id)
+        except Project.DoesNotExist:
+            return Response({'error': '项目不存在或无权限'}, status=status.HTTP_403_FORBIDDEN)
+
+        queryset = TestCase.objects.filter(project_id=project_id)
+        if version_id:
+            queryset = queryset.filter(versions__id=version_id)
+
+        modules = (
+            queryset
+            .values('module')
+            .annotate(count=models.Count('id'))
+            .order_by('module')
+        )
+
+        # 过滤空模块名并格式化返回
+        result = [
+            {'module': m['module'] or '默认模块', 'count': m['count']}
+            for m in modules
+        ]
+
+        return Response({
+            'project_id': int(project_id),
+            'version_id': int(version_id) if version_id else None,
+            'total_modules': len(result),
+            'total_cases': sum(m['count'] for m in result),
+            'modules': result
+        })
+
+
 class TestCaseBatchDeleteView(APIView):
     """批量删除测试用例"""
     permission_classes = [permissions.IsAuthenticated]

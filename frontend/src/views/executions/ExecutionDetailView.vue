@@ -89,12 +89,41 @@
 
         <!-- 批量操作按钮 -->
         <div v-if="selectedCases.length > 0" class="batch-actions">
+          <span class="batch-count">{{ $t('execution.batchSelected') }}: <strong>{{ selectedCases.length }}</strong></span>
+          <el-dropdown
+            trigger="click"
+            @command="handleBatchStatusCommand"
+            :disabled="isBatchUpdating">
+            <el-button type="primary" :loading="isBatchUpdating">
+              {{ $t('execution.batchUpdateStatus') }}
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="untested" :icon="QuestionFilled">
+                  {{ $t('execution.untested') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="passed" :icon="CircleCheck">
+                  {{ $t('execution.passed') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="failed" :icon="CircleClose">
+                  {{ $t('execution.failed') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="blocked" :icon="WarningFilled">
+                  {{ $t('execution.blocked') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="retest">
+                  {{ $t('execution.retest') }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-button
             type="danger"
             :icon="Delete"
             @click="batchDeleteCases"
             :disabled="isDeleting">
-            {{ $t('execution.batchDelete') }} ({{ selectedCases.length }})
+            {{ $t('execution.batchDelete') }}
           </el-button>
         </div>
 
@@ -363,7 +392,19 @@ const selectedCases = ref([])
 const currentPage = ref(1)
 const pageSize = ref(10)
 const isDeleting = ref(false)
+const isBatchUpdating = ref(false)
 const tableRef = ref(null)
+
+// 清空所有表格的选中状态（v-for 中 ref 是数组）
+const clearTableSelection = () => {
+  const tables = tableRef.value
+  if (!tables) return
+  if (Array.isArray(tables)) {
+    tables.forEach(t => t?.clearSelection?.())
+  } else {
+    tables.clearSelection?.()
+  }
+}
 const commentDialogVisible = ref(false)
 const editingComment = ref('')
 const currentCommentRow = ref(null)
@@ -485,6 +526,68 @@ const viewCaseHistory = async (runCase) => {
   }
 }
 
+// 批量状态更新
+const handleBatchStatusCommand = async (newStatus) => {
+  if (selectedCases.value.length === 0) {
+    ElMessage.warning(t('execution.selectCasesFirst'))
+    return
+  }
+  
+  const statusTextMap = {
+    untested: t('execution.untested'),
+    passed: t('execution.passed'),
+    failed: t('execution.failed'),
+    blocked: t('execution.blocked'),
+    retest: t('execution.retest')
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      t('execution.batchStatusConfirm', {
+        count: selectedCases.value.length,
+        status: statusTextMap[newStatus]
+      }),
+      t('common.warning'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  
+  isBatchUpdating.value = true
+  try {
+    const ids = selectedCases.value.map(c => c.id)
+    await api.post('/executions/run_cases/batch_update_status/', {
+      ids: ids,
+      status: newStatus
+    })
+    
+    // 更新本地数据
+    selectedCases.value.forEach(c => {
+      c.status = newStatus
+    })
+    
+    ElMessage.success(t('execution.batchStatusSuccess', {
+      count: ids.length,
+      status: statusTextMap[newStatus]
+    }))
+    
+    selectedCases.value = []
+    clearTableSelection()
+  } catch (error) {
+    ElMessage.error(t('execution.batchStatusFailed'))
+  } finally {
+    isBatchUpdating.value = false
+  }
+  
+  // 刷新测试计划数据以更新进度统计（独立处理，不影响批量更新的成功提示）
+  try {
+    await fetchTestPlan()
+  } catch {
+    // 刷新失败不影响批量更新结果
+  }
+}
+
 // 处理选择变化
 const handleSelectionChange = (selection) => {
   selectedCases.value = selection
@@ -564,9 +667,7 @@ const getFilteredCases = (cases) => {
 const handleModuleFilterChange = () => {
   currentPage.value = 1
   selectedCases.value = []
-  if (tableRef.value) {
-    tableRef.value.clearSelection()
-  }
+  clearTableSelection()
 }
 
 // 分页相关
@@ -583,19 +684,13 @@ const getSerialNumber = (index) => {
 
 const handlePageChange = () => {
   selectedCases.value = []
-  // 清空表格选择
-  if (tableRef.value) {
-    tableRef.value.clearSelection()
-  }
+  clearTableSelection()
 }
 
 const handleSizeChange = () => {
   currentPage.value = 1
   selectedCases.value = []
-  // 清空表格选择
-  if (tableRef.value) {
-    tableRef.value.clearSelection()
-  }
+  clearTableSelection()
 }
 
 const formatDate = (dateString) => {
@@ -885,6 +980,17 @@ onMounted(() => {
   margin-bottom: 16px;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+.batch-count {
+  font-size: 13px;
+  color: #606266;
+  margin-right: auto;
+}
+.batch-count strong {
+  color: #409eff;
+  font-size: 15px;
 }
 
 /* 筛选条件 */

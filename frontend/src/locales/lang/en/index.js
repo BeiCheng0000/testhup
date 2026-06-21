@@ -43,6 +43,7 @@ export default {
   reviewForm: reviewModule.reviewForm,
   reviewDetail: reviewModule.reviewDetail,
   reviewTemplate: reviewModule.reviewTemplate,
+  reviewExecution: reviewModule.reviewExecution,
 
   // 需求分析模块
   requirementAnalysis: requirementModule.requirementAnalysis,

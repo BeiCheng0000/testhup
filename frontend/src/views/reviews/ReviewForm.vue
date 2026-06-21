@@ -68,35 +68,73 @@
           />
         </el-form-item>
 
-        <el-form-item :label="$t('reviewForm.selectTestcases')" prop="testcases">
+        <el-form-item :label="$t('reviewForm.selectTestcases')">
           <div class="testcase-selector">
-            <div class="search-bar">
-              <el-input
-                v-model="testcaseSearch"
-                :placeholder="$t('reviewForm.searchTestcases')"
-                @input="searchTestcases"
-                clearable
-              >
-                <template #prefix>
-                  <el-icon><Search /></el-icon>
-                </template>
-              </el-input>
-              <el-button type="primary" @click="showTestcaseSelector">{{ $t('reviewForm.selectTestcasesBtn') }}</el-button>
+            <el-row :gutter="12" class="module-select-row">
+              <el-col :span="12">
+                <el-select
+                  v-model="selectedVersion"
+                  :placeholder="$t('reviewForm.selectVersionPlaceholder')"
+                  :disabled="!form.projects || form.projects.length === 0"
+                  clearable
+                  @change="onVersionChange"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="version in availableVersions"
+                    :key="version.id"
+                    :label="version.name"
+                    :value="version.id"
+                  />
+                </el-select>
+              </el-col>
+              <el-col :span="12">
+                <el-select
+                  v-model="selectedModules"
+                  multiple
+                  :placeholder="$t('reviewForm.selectModulesPlaceholder')"
+                  :disabled="!form.projects || form.projects.length === 0"
+                  collapse-tags
+                  collapse-tags-tooltip
+                  :max-collapse-tags="10"
+                  @change="onModuleChange"
+                  style="width: 100%"
+                  popper-class="module-select-popper"
+                >
+                  <el-option
+                    v-for="mod in availableModules"
+                    :key="mod"
+                    :label="mod"
+                    :value="mod"
+                  >
+                    <span>{{ mod }}</span>
+                    <span class="module-option-count">({{ getModuleStatCount(mod) }})</span>
+                  </el-option>
+                </el-select>
+              </el-col>
+            </el-row>
+
+            <div v-if="selectedModules.length > 0" class="module-summary">
+              <div class="module-tags-wrap">
+                <el-tag
+                  v-for="mod in selectedModules"
+                  :key="mod"
+                  type="info"
+                  class="module-tag"
+                  closable
+                  @close="removeModule(mod)"
+                >
+                  <span class="tag-text">{{ mod }}</span>
+                  <span class="tag-count">({{ getSelectedModuleCount(mod) }} {{ $t('reviewForm.cases') }})</span>
+                </el-tag>
+              </div>
+              <div class="total-cases">
+                {{ $t('reviewForm.totalCases') }}: <strong>{{ totalSelectedCases }}</strong>
+              </div>
             </div>
 
-            <div class="selected-testcases">
-              <el-tag
-                v-for="testcase in selectedTestcases"
-                :key="testcase.id"
-                closable
-                @close="removeTestcase(testcase.id)"
-                class="testcase-tag"
-              >
-                {{ testcase.title }}
-              </el-tag>
-              <div v-if="selectedTestcases.length === 0" class="empty-tip">
-                {{ $t('reviewForm.emptyTestcasesTip') }}
-              </div>
+            <div v-if="selectedModules.length === 0 && form.projects.length > 0" class="empty-tip">
+              {{ $t('reviewForm.emptyTestcasesTip') }}
             </div>
           </div>
         </el-form-item>
@@ -130,117 +168,6 @@
       </el-form>
     </div>
 
-    <!-- 用例选择对话框 -->
-    <el-dialog v-model="testcaseSelectorVisible" :title="$t('reviewForm.testcaseSelectorTitle')" :close-on-click-modal="false" width="1100px">
-      <div class="testcase-selector-content">
-        <div class="testcase-dialog-filter-bar">
-          <el-row :gutter="12">
-            <el-col :span="5">
-              <el-input
-                v-model="testcaseSearchInDialog"
-                :placeholder="$t('reviewForm.searchTestcases')"
-                clearable
-              >
-                <template #prefix>
-                  <el-icon><Search /></el-icon>
-                </template>
-              </el-input>
-            </el-col>
-            <el-col :span="5">
-              <el-select
-                v-model="testcaseDialogProjectFilter"
-                :placeholder="$t('testcase.relatedProject')"
-                clearable
-                @change="onTestcaseDialogProjectChange"
-              >
-                <el-option
-                  v-for="project in projects"
-                  :key="project.id"
-                  :label="project.name"
-                  :value="project.id"
-                />
-              </el-select>
-            </el-col>
-            <el-col :span="5">
-              <el-select
-                v-model="testcaseDialogVersionFilter"
-                :placeholder="$t('testcase.versionFilter')"
-                clearable
-                :disabled="!testcaseDialogProjectFilter"
-              >
-                <el-option
-                  v-for="version in testcaseDialogVersions"
-                  :key="version.id"
-                  :label="version.name"
-                  :value="version.id"
-                />
-              </el-select>
-            </el-col>
-            <el-col :span="5">
-              <el-input
-                v-model="testcaseDialogModuleFilter"
-                :placeholder="$t('testcase.moduleFilter')"
-                clearable
-              />
-            </el-col>
-            <el-col :span="4">
-              <el-select
-                v-model="testcaseDialogPriorityFilter"
-                :placeholder="$t('testcase.priorityFilter')"
-                clearable
-              >
-                <el-option :label="$t('testcase.low')" value="low" />
-                <el-option :label="$t('testcase.medium')" value="medium" />
-                <el-option :label="$t('testcase.high')" value="high" />
-                <el-option :label="$t('testcase.critical')" value="critical" />
-              </el-select>
-            </el-col>
-          </el-row>
-        </div>
-
-        <el-table
-          :data="filteredTestcases"
-          @selection-change="handleTestcaseSelection"
-          max-height="400"
-          class="testcase-table"
-        >
-          <el-table-column type="selection" width="55" />
-          <el-table-column prop="module" :label="$t('testcase.module')" width="100">
-            <template #default="{ row }">
-              {{ row.module || '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="title" :label="$t('reviewForm.testcaseTitle')" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="preconditions" :label="$t('testcase.preconditions')" min-width="210">
-            <template #default="{ row }">
-              <span v-if="row.preconditions" v-html="formatRichText(row.preconditions)" class="rich-cell"></span>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="steps" :label="$t('testcase.steps')" min-width="240">
-            <template #default="{ row }">
-              <span v-if="row.steps" v-html="formatRichText(row.steps)" class="rich-cell"></span>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="expected_result" :label="$t('testcase.expectedResult')" min-width="240">
-            <template #default="{ row }">
-              <span v-if="row.expected_result" v-html="formatRichText(row.expected_result)" class="rich-cell"></span>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="priority" :label="$t('reviewForm.priority')" width="90">
-            <template #default="{ row }">
-              <el-tag :class="`priority-tag ${row.priority}`">{{ getPriorityText(row.priority) }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <template #footer>
-        <el-button @click="testcaseSelectorVisible = false">{{ $t('reviewForm.cancel') }}</el-button>
-        <el-button type="primary" @click="confirmTestcaseSelection">{{ $t('reviewForm.confirm') }}</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -249,7 +176,6 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 
 const route = useRoute()
@@ -259,21 +185,17 @@ const isEdit = computed(() => !!route.params.id)
 
 const formRef = ref()
 const saving = ref(false)
-const testcaseSelectorVisible = ref(false)
-const testcaseSearch = ref('')
-const testcaseSearchInDialog = ref('')
-const testcaseDialogProjectFilter = ref('')
-const testcaseDialogVersionFilter = ref('')
-const testcaseDialogModuleFilter = ref('')
-const testcaseDialogPriorityFilter = ref('')
-const testcaseDialogVersions = ref([])
 
 const projects = ref([])
 const projectUsers = ref([])
 const templates = ref([])
 const testcases = ref([])
-const selectedTestcases = ref([])
-const tempSelectedTestcases = ref([])
+
+// 版本和模块选择
+const availableVersions = ref([])
+const selectedVersion = ref('')
+const availableModules = ref([])
+const selectedModules = ref([])
 
 const form = reactive({
   title: '',
@@ -289,49 +211,17 @@ const form = reactive({
 const rules = computed(() => ({
   title: [{ required: true, message: t('reviewForm.titleRequired'), trigger: 'blur' }],
   projects: [{ required: true, message: t('reviewForm.projectRequired'), trigger: 'change' }],
-  testcases: [{ required: true, message: t('reviewForm.testcasesRequired'), trigger: 'change' }],
   reviewers: [{ required: true, message: t('reviewForm.reviewersRequired'), trigger: 'change' }]
 }))
 
-const filteredTestcases = computed(() => {
-  let result = testcases.value
-  
-  // 搜索过滤
-  if (testcaseSearchInDialog.value) {
-    const kw = testcaseSearchInDialog.value.toLowerCase()
-    result = result.filter(tc =>
-      tc.title.toLowerCase().includes(kw) ||
-      (tc.module && tc.module.toLowerCase().includes(kw)) ||
-      (tc.preconditions && tc.preconditions.toLowerCase().includes(kw)) ||
-      (tc.steps && tc.steps.toLowerCase().includes(kw))
-    )
-  }
-  
-  // 项目筛选
-  if (testcaseDialogProjectFilter.value) {
-    result = result.filter(tc => tc.project?.id === testcaseDialogProjectFilter.value)
-  }
-  
-  // 版本筛选
-  if (testcaseDialogVersionFilter.value) {
-    result = result.filter(tc => 
-      tc.versions && tc.versions.some(v => v.id === testcaseDialogVersionFilter.value)
-    )
-  }
-  
-  // 模块筛选
-  if (testcaseDialogModuleFilter.value) {
-    const mf = testcaseDialogModuleFilter.value.toLowerCase()
-    result = result.filter(tc => tc.module && tc.module.toLowerCase().includes(mf))
-  }
-  
-  // 优先级筛选
-  if (testcaseDialogPriorityFilter.value) {
-    result = result.filter(tc => tc.priority === testcaseDialogPriorityFilter.value)
-  }
-  
-  return result
-})
+// 从已加载的用例中提取去重的模块列表
+const extractModules = (cases) => {
+  const modules = new Set()
+  cases.forEach(c => {
+    if (c.module) modules.add(c.module)
+  })
+  return Array.from(modules).sort()
+}
 
 const fetchProjects = async () => {
   try {
@@ -354,17 +244,21 @@ const fetchProjectUsers = async () => {
   }
 }
 
-const fetchTestcases = async (projectIds) => {
+const fetchTestcases = async (projectIds, versionId = '') => {
   try {
-    // 如果没有选择项目，清空用例列表
     if (!projectIds || projectIds.length === 0) {
       testcases.value = []
+      availableModules.value = []
       return
     }
 
-    // 获取所有选中项目的用例
+    const params = { page_size: 10000 }
+    if (versionId) {
+      params.version = versionId
+    }
+
     const promises = projectIds.map(projectId =>
-      api.get('/testcases/', { params: { project: projectId } })
+      api.get('/testcases/', { params: { project: projectId, ...params } })
     )
 
     const responses = await Promise.all(promises)
@@ -375,12 +269,13 @@ const fetchTestcases = async (projectIds) => {
       allTestcases.push(...cases)
     })
 
-    // 去重（基于用例ID）
+    // 去重
     const uniqueTestcases = allTestcases.filter((testcase, index, self) =>
       index === self.findIndex(t => t.id === testcase.id)
     )
 
     testcases.value = uniqueTestcases
+    // 不再在此处设置 availableModules，由 fetchModuleStats 统一管理模块列表
   } catch (error) {
     console.error('Fetch testcases failed:', error)
   }
@@ -418,63 +313,153 @@ const fetchTemplates = async (projectIds) => {
   }
 }
 
+const fetchVersions = async (projectIds) => {
+  if (!projectIds || projectIds.length === 0) {
+    availableVersions.value = []
+    return
+  }
+
+  try {
+    const promises = projectIds.map(projectId =>
+      api.get(`/versions/projects/${projectId}/versions/`)
+    )
+    const responses = await Promise.all(promises)
+    const allVersions = []
+    responses.forEach(response => {
+      const vers = response.data.results || response.data || []
+      allVersions.push(...vers)
+    })
+    // 去重
+    availableVersions.value = allVersions.filter((v, i, self) =>
+      i === self.findIndex(t => t.id === v.id)
+    )
+  } catch (error) {
+    console.error('Fetch versions failed:', error)
+    availableVersions.value = []
+  }
+}
+
 const onProjectChange = (projectIds) => {
+  // 清空版本、模块和用例相关选择
+  selectedVersion.value = ''
+  selectedModules.value = []
+  availableVersions.value = []
+  availableModules.value = []
+  moduleCaseCountMap.value = {}
+  form.reviewers = []
+
   if (projectIds && projectIds.length > 0) {
+    fetchVersions(projectIds)
     fetchTestcases(projectIds)
+    fetchModuleStats(projectIds)
     fetchTemplates(projectIds)
   } else {
-    // 如果没有选择项目，清空相关数据
     testcases.value = []
     templates.value = []
   }
-
-  // 清空相关选择
-  form.reviewers = []
-  form.testcases = []
-  selectedTestcases.value = []
 }
 
-const showTestcaseSelector = () => {
-  if (!form.projects || form.projects.length === 0) {
-    ElMessage.warning(t('reviewForm.selectProjectFirst'))
+const onVersionChange = () => {
+  selectedModules.value = []
+  moduleCaseCountMap.value = {}
+  if (form.projects && form.projects.length > 0) {
+    fetchTestcases(form.projects, selectedVersion.value)
+    fetchModuleStats(form.projects)
+  }
+}
+
+// 下拉框中显示的模块可用用例数（来自所有已加载用例）
+const getModuleCaseCount = (moduleName) => {
+  return testcases.value.filter(tc => tc.module === moduleName).length
+}
+
+// 标签中显示的已选中模块的用例数（来自API统计）
+const getSelectedModuleCount = (moduleName) => {
+  // 优先使用 API 统计的模块用例数
+  if (moduleCaseCountMap.value[moduleName] !== undefined) {
+    return moduleCaseCountMap.value[moduleName]
+  }
+  return 0
+}
+
+// 总计已选中用例数（来自API统计，不限于已加载的用例）
+const totalSelectedCases = computed(() => {
+  return selectedModules.value.reduce((sum, mod) => {
+    return sum + (moduleCaseCountMap.value[mod] || 0)
+  }, 0)
+})
+
+// 模块统计载入状态
+const moduleStatsLoading = ref(false)
+
+// 通过API获取模块统计数据（按项目+版本）
+const fetchModuleStats = async (projectIds) => {
+  if (!projectIds || projectIds.length === 0) {
+    availableModules.value = []
     return
   }
-  // 重置对话框筛选
-  testcaseSearch.value = ''
-  testcaseSearchInDialog.value = ''
-  testcaseDialogProjectFilter.value = ''
-  testcaseDialogVersionFilter.value = ''
-  testcaseDialogModuleFilter.value = ''
-  testcaseDialogPriorityFilter.value = ''
-  testcaseDialogVersions.value = []
-  testcaseSelectorVisible.value = true
-}
+  moduleStatsLoading.value = true
+  try {
+    const params = {}
+    if (selectedVersion.value) {
+      params.version = selectedVersion.value
+    }
+    const promises = projectIds.map(projectId =>
+      api.get('/testcases/module-stats/', { params: { project: projectId, ...params } })
+    )
+    const responses = await Promise.all(promises)
 
-const onTestcaseDialogProjectChange = (projectId) => {
-  testcaseDialogVersionFilter.value = ''
-  testcaseDialogVersions.value = []
-  if (projectId) {
-    api.get(`/versions/projects/${projectId}/versions/`).then(res => {
-      testcaseDialogVersions.value = res.data || []
-    }).catch(() => {
-      testcaseDialogVersions.value = []
+    // 合并多个项目的模块统计
+    const moduleCountMap = {}
+    responses.forEach(response => {
+      const data = response.data
+      if (data.modules) {
+        data.modules.forEach(m => {
+          if (moduleCountMap[m.module]) {
+            moduleCountMap[m.module] += m.count
+          } else {
+            moduleCountMap[m.module] = m.count
+          }
+        })
+      }
     })
+
+    // 按模块名排序
+    const sortedModules = Object.keys(moduleCountMap).sort()
+    availableModules.value = sortedModules
+    // 缓存模块用例数映射
+    moduleCaseCountMap.value = moduleCountMap
+  } catch (error) {
+    console.error('Fetch module stats failed:', error)
+    // 降级：从已加载用例中提取模块（仅当测试用例已加载时有意义）
+    if (testcases.value.length > 0) {
+      availableModules.value = extractModules(testcases.value)
+    }
+  } finally {
+    moduleStatsLoading.value = false
   }
 }
 
-const handleTestcaseSelection = (selection) => {
-  tempSelectedTestcases.value = selection
+// 缓存模块->用例数映射
+const moduleCaseCountMap = ref({})
+
+// 获取模块用例数（优先从统计API获取）
+const getModuleStatCount = (moduleName) => {
+  if (moduleCaseCountMap.value[moduleName] !== undefined) {
+    return moduleCaseCountMap.value[moduleName]
+  }
+  // 降级
+  return testcases.value.filter(tc => tc.module === moduleName).length
 }
 
-const confirmTestcaseSelection = () => {
-  selectedTestcases.value = [...tempSelectedTestcases.value]
-  form.testcases = selectedTestcases.value.map(tc => tc.id)
-  testcaseSelectorVisible.value = false
+const onModuleChange = () => {
+  // 不再将用例ID填入 form.testcases，保存时只发送模块名
+  // 用例总数和统计由 moduleCaseCountMap（API统计）提供
 }
 
-const removeTestcase = (id) => {
-  selectedTestcases.value = selectedTestcases.value.filter(tc => tc.id !== id)
-  form.testcases = selectedTestcases.value.map(tc => tc.id)
+const removeModule = (moduleName) => {
+  selectedModules.value = selectedModules.value.filter(m => m !== moduleName)
+  onModuleChange()
 }
 
 const onReviewersChange = () => {
@@ -498,15 +483,24 @@ const applyTemplate = async (templateId) => {
 const saveReview = async () => {
   if (!formRef.value) return
 
+  // 模块校验
+  if (selectedModules.value.length === 0) {
+    ElMessage.warning(t('reviewForm.testcasesRequired'))
+    return
+  }
+
   try {
     await formRef.value.validate()
     saving.value = true
 
     const data = {
-      ...form,
-      testcases: form.testcases,
+      title: form.title,
+      description: form.description,
+      projects: form.projects,
+      priority: form.priority,
+      deadline: form.deadline,
+      modules: selectedModules.value,
       reviewers: form.reviewers,
-      // 确保包含 template 字段
       template: form.template || null
     }
 
@@ -530,25 +524,6 @@ const saveReview = async () => {
   } finally {
     saving.value = false
   }
-}
-
-const getPriorityText = (priority) => {
-  const textMap = {
-    low: t('reviewForm.priorityLow'),
-    medium: t('reviewForm.priorityMedium'),
-    high: t('reviewForm.priorityHigh'),
-    critical: t('reviewForm.priorityUrgent')
-  }
-  return textMap[priority] || priority
-}
-
-const formatRichText = (text) => {
-  if (!text) return ''
-  let result = text.replace(/\r?\n/g, '<br/>')
-  if (!/<br/i.test(result)) {
-    result = result.replace(/([。！？”"）\)\u4e00-\u9fff\w])(\d+)[\.\、](?=\s*\D)/g, '$1<br/>$2.')
-  }
-  return result
 }
 
 const findMatchingTemplate = (review, templateList) => {
@@ -602,13 +577,19 @@ const fetchReviewData = async (reviewId) => {
     form.deadline = review.deadline
     form.reviewers = review.assignments.map(a => a.reviewer.id)
 
-    // 处理测试用例
-    selectedTestcases.value = review.testcases
-    form.testcases = review.testcases.map(tc => tc.id)
+    // 处理测试用例 - 从 review.modules 读取已选模块
+    if (review.modules && review.modules.length > 0) {
+      selectedModules.value = [...review.modules]
+    } else {
+      // 兼容旧数据：从已有用例提取模块
+      selectedModules.value = extractModules(review.testcases)
+    }
 
     // 加载项目相关数据
     if (form.projects.length > 0) {
+      await fetchVersions(form.projects)
       await fetchTestcases(form.projects)
+      await fetchModuleStats(form.projects)
       await fetchTemplates(form.projects)
 
       // 在模板加载完成后，尝试找到匹配的模板
@@ -623,10 +604,6 @@ const fetchReviewData = async (reviewId) => {
     ElMessage.error(t('reviewForm.fetchReviewFailed'))
     router.push('/ai-generation/reviews')
   }
-}
-
-const searchTestcases = () => {
-  // 搜索用例的逻辑
 }
 
 onMounted(async () => {
@@ -670,51 +647,93 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .testcase-selector {
-  .search-bar {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
+  .module-select-row {
+    margin-bottom: 12px;
   }
 
-  .selected-testcases {
+  .module-summary {
     border: 1px solid #dcdfe6;
     border-radius: 4px;
-    min-height: 80px;
     padding: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
 
-    .testcase-tag {
-      margin: 4px;
+    .module-tags-wrap {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-content: flex-start;
     }
 
-    .empty-tip {
-      color: #909399;
-      text-align: center;
-      padding: 24px;
+    .module-tag {
+      margin: 0;
+      max-width: 100%;
+      display: inline-flex;
+      align-items: center;
+
+      .tag-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tag-count {
+        flex-shrink: 0;
+        margin-left: 2px;
+      }
+    }
+
+    .total-cases {
+      flex-shrink: 0;
+      font-size: 13px;
+      color: #606266;
+      padding: 4px 12px;
+      background: #f5f7fa;
+      border-radius: 4px;
+      margin-top: 2px;
+
+      strong {
+        color: #409eff;
+        font-size: 16px;
+      }
     }
   }
-}
 
-.testcase-selector-content {
-  .testcase-dialog-filter-bar {
-    margin-bottom: 16px;
-  }
-  
-  .rich-cell {
-    line-height: 1.6;
-    word-break: break-word;
-    white-space: normal;
-    display: block;
-  }
-  
-  :deep(.el-table__body-wrapper .cell) {
-    word-break: break-word;
+  .empty-tip {
+    color: #909399;
+    text-align: center;
+    padding: 24px;
+    border: 1px dashed #dcdfe6;
+    border-radius: 4px;
   }
 }
+</style>
 
-.priority-tag {
-  &.low { color: #67c23a; }
-  &.medium { color: #e6a23c; }
-  &.high { color: #f56c6c; }
-  &.critical { color: #f56c6c; font-weight: bold; }
+<style lang="scss">
+.module-select-popper {
+  .el-select-dropdown__list {
+    max-height: 400px;
+  }
+
+  .el-select-dropdown__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: auto;
+    line-height: 1.5;
+    padding: 8px 20px;
+  }
+
+  .module-option-count {
+    flex-shrink: 0;
+    margin-left: 8px;
+    font-size: 12px;
+    color: #909399;
+  }
 }
 </style>
