@@ -111,6 +111,7 @@ class TestAppFlow:
         
         # 执行 UI Flow
         runner = UiFlowRunner(username=username)
+        runner.set_device_id(device_id)  # 设置设备ID用于 uiautomator2 连接
         
         if isinstance(test_case.ui_flow, list):
             ui_flow = test_case.ui_flow

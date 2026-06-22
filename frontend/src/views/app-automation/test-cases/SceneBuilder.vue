@@ -2763,6 +2763,19 @@ const fillFieldsByTarget = (element, config, target) => {
             
             ElMessage.success(`已关联 ${getTargetTitle(target)}: ${element.name} (区域)`)
         }
+    } else if (element.element_type === 'uiautomator') {
+        if (element.config && element.config.locator_type && element.config.locator_value) {
+            config[typeField] = 'uiautomator'
+            config[`${prefix}locator_type`] = element.config.locator_type
+            config[`${prefix}locator_value`] = element.config.locator_value
+            if (element.config.fallback_locators?.length) {
+                config[`${prefix}fallback_locators`] = element.config.fallback_locators
+            }
+            
+            ElMessage.success(`已关联 ${getTargetTitle(target)}: ${element.name} (UI层级)`)
+        } else {
+            ElMessage.warning('该UI层级元素缺少定位配置')
+        }
     } else {
         ElMessage.warning(`元素类型 ${element.element_type} 不适用于 ${getTargetTitle(target)}`)
     }

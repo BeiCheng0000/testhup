@@ -182,6 +182,9 @@ airtest==1.4.3
 loguru==0.7.3
 Pillow==12.1.0
 
+# UI层级定位（WEditor风格元素选择）
+uiautomator2>=3.0.0
+
 # OCR 文字识别支持
 easyocr==1.7.2
 opencv-contrib-python==4.6.0.66

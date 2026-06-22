@@ -66,7 +66,7 @@
             </el-select>
           </el-col>
           <el-col :span="4">
-            <el-select v-model="versionFilter" :placeholder="$t('testcase.versionFilter')" clearable @change="handleFilter" :disabled="!projectFilter">
+            <el-select v-model="versionFilter" :placeholder="$t('testcase.versionFilter')" clearable @change="onVersionFilterChange" :disabled="!projectFilter">
               <el-option
                 v-for="version in filterVersions"
                 :key="version.id"
@@ -76,12 +76,20 @@
             </el-select>
           </el-col>
           <el-col :span="4">
-            <el-input
+            <el-select
               v-model="moduleFilter"
               :placeholder="$t('testcase.moduleFilter')"
               clearable
-              @input="handleSearch"
-            />
+              :disabled="!projectFilter"
+              @change="handleFilter"
+            >
+              <el-option
+                v-for="mod in moduleOptions"
+                :key="mod.module"
+                :label="`${mod.module} (${mod.count})`"
+                :value="mod.module"
+              />
+            </el-select>
           </el-col>
           <el-col :span="4">
             <el-select v-model="priorityFilter" :placeholder="$t('testcase.priorityFilter')" clearable @change="handleFilter">
@@ -368,6 +376,7 @@ const moduleFilter = ref('')
 const priorityFilter = ref('')
 const typeFilter = ref('')
 const filterVersions = ref([])
+const moduleOptions = ref([])
 const selectedTestCases = ref([])
 const isDeleting = ref(false)
 const importDialogVisible = ref(false)
@@ -425,8 +434,11 @@ const handleFilter = () => {
 const onProjectFilterChange = (projectId) => {
   versionFilter.value = ''
   filterVersions.value = []
+  moduleFilter.value = ''
+  moduleOptions.value = []
   if (projectId) {
     fetchFilterVersions(projectId)
+    fetchModuleOptions(projectId, null)
   }
   handleFilter()
 }
@@ -438,6 +450,28 @@ const fetchFilterVersions = async (projectId) => {
   } catch (error) {
     console.error('Fetch filter versions failed:', error)
     filterVersions.value = []
+  }
+}
+
+const onVersionFilterChange = (versionId) => {
+  moduleFilter.value = ''
+  if (projectFilter.value) {
+    fetchModuleOptions(projectFilter.value, versionId || null)
+  }
+  handleFilter()
+}
+
+const fetchModuleOptions = async (projectId, versionId) => {
+  try {
+    const params = { project: projectId }
+    if (versionId) {
+      params.version = versionId
+    }
+    const response = await api.get('/testcases/module-stats/', { params })
+    moduleOptions.value = response.data.modules || []
+  } catch (error) {
+    console.error('Fetch module options failed:', error)
+    moduleOptions.value = []
   }
 }
 

@@ -34,6 +34,7 @@ class ExecutionResult:
 
 class ElementType:
     """元素类型"""
-    IMAGE = 'image'      # 图片元素
-    POS = 'pos'          # 坐标元素
-    REGION = 'region'    # 区域元素
+    IMAGE = 'image'            # 图片元素
+    POS = 'pos'                # 坐标元素
+    REGION = 'region'          # 区域元素
+    UI_AUTOMATOR = 'uiautomator'  # UI层级定位元素

@@ -16,6 +16,7 @@
               <el-radio-button value="image">图片</el-radio-button>
               <el-radio-button value="pos">坐标</el-radio-button>
               <el-radio-button value="region">区域</el-radio-button>
+              <el-radio-button value="uiautomator">UI层级</el-radio-button>
             </el-radio-group>
             
             <!-- 搜索 -->
@@ -138,6 +139,19 @@
                   <el-tag type="warning" size="small">Y2: {{ row.config?.y2 }}</el-tag>
                 </el-space>
               </el-space>
+            </div>
+            
+            <!-- UI层级定位类型 -->
+            <div v-else-if="row.element_type === 'uiautomator'" class="preview-uia">
+              <div v-if="row.config?.screenshot_base64" style="margin-bottom: 4px;">
+                <img 
+                  :src="row.config.screenshot_base64" 
+                  style="max-width: 100px; max-height: 60px; border: 1px solid #e4e7ed; border-radius: 2px;" 
+                />
+              </div>
+              <el-tag type="info" size="small">
+                {{ row.config?.locator_type }}={{ truncateValue(row.config?.locator_value) }}
+              </el-tag>
             </div>
           </template>
         </el-table-column>
@@ -448,7 +462,8 @@ const getTypeColor = (type) => {
   const colorMap = {
     'image': 'primary',
     'pos': 'success',
-    'region': 'warning'
+    'region': 'warning',
+    'uiautomator': ''
   }
   return colorMap[type] || 'info'
 }
@@ -457,9 +472,15 @@ const getTypeName = (type) => {
   const nameMap = {
     'image': '图片',
     'pos': '坐标',
-    'region': '区域'
+    'region': '区域',
+    'uiautomator': 'UI层级'
   }
   return nameMap[type] || type
+}
+
+const truncateValue = (val) => {
+  if (!val) return '-'
+  return val.length > 25 ? val.substring(0, 25) + '...' : val
 }
 
 // formatDateTime 已从 app-automation-helpers 导入

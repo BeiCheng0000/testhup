@@ -147,6 +147,7 @@ class AppElement(models.Model):
         (ElementType.IMAGE, '图片元素'),
         (ElementType.POS, '坐标元素'),
         (ElementType.REGION, '区域元素'),
+        (ElementType.UI_AUTOMATOR, 'UI层级定位'),
     ]
 
     project = models.ForeignKey(
@@ -164,7 +165,7 @@ class AppElement(models.Model):
     )
     
     element_type = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=ELEMENT_TYPE_CHOICES,
         verbose_name='元素类型'
     )
@@ -190,6 +191,16 @@ class AppElement(models.Model):
         }
         pos类型: {"x": 100, "y": 200}
         region类型: {"x1": 100, "y1": 200, "x2": 300, "y2": 400}
+        uiautomator类型: {
+            "locator_type": "resource_id",
+            "locator_value": "com.example:id/login_btn",
+            "fallback_locators": [{"type": "xpath", "value": "//Button[@text='登录']"}],
+            "bounds": [100, 800, 980, 950],
+            "class_name": "android.widget.Button",
+            "text": "登录",
+            "content_desc": "",
+            "screenshot_base64": "data:image/png;base64,..."
+        }
         """
     )
     

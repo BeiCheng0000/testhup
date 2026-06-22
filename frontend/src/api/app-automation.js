@@ -85,6 +85,24 @@ export function captureDeviceScreenshot(id) {
 }
 
 /**
+ * 获取设备UI层级树（截图+可交互元素列表）
+ * @param {number} id - 设备ID
+ * @param {object} options - { skipScreenshot: boolean } 是否跳过截图
+ */
+export function dumpDeviceHierarchy(id, options = {}) {
+  const params = {}
+  if (options.skipScreenshot) {
+    params.skip_screenshot = '1'
+  }
+  return request({
+    url: `/app-automation/devices/${id}/dump-hierarchy/`,
+    method: 'post',
+    params,
+    timeout: 30000 // 层级dump可能需要较长时间
+  })
+}
+
+/**
  * 删除设备
  */
 export function deleteDevice(id) {

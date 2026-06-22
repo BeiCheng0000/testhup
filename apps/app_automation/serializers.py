@@ -147,6 +147,28 @@ class AppElementSerializer(serializers.ModelSerializer):
                     f'区域元素缺少必需字段: {", ".join(missing_fields)}'
                 )
         
+        elif element_type == 'uiautomator':
+            # UI层级定位类型需要 locator_type 和 locator_value
+            if not value.get('locator_type'):
+                raise serializers.ValidationError('UI层级定位元素必须包含 locator_type 字段（resource_id/text/class_name/xpath）')
+            if not value.get('locator_value'):
+                raise serializers.ValidationError('UI层级定位元素必须包含 locator_value 字段')
+            valid_locator_types = ['resource_id', 'text', 'class_name', 'xpath', 'content_desc']
+            if value.get('locator_type') not in valid_locator_types:
+                raise serializers.ValidationError(
+                    f'无效的定位类型 "{value.get("locator_type")}"，支持: {", ".join(valid_locator_types)}'
+                )
+            # 验证 fallback_locators 格式
+            fallback_locators = value.get('fallback_locators', [])
+            if fallback_locators:
+                if not isinstance(fallback_locators, list):
+                    raise serializers.ValidationError('fallback_locators 必须是数组')
+                for idx, fb in enumerate(fallback_locators):
+                    if not isinstance(fb, dict):
+                        raise serializers.ValidationError(f'fallback_locators[{idx}] 必须是对象')
+                    if not fb.get('type') or not fb.get('value'):
+                        raise serializers.ValidationError(f'fallback_locators[{idx}] 必须包含 type 和 value 字段')
+        
         return value
     
     def to_representation(self, instance):

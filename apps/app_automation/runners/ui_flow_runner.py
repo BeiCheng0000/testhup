@@ -25,6 +25,14 @@ from airtest.core.api import (
     text as airtest_text,
 )
 
+# uiautomator2 支持（UI层级定位元素）
+try:
+    import uiautomator2 as u2
+    U2_AVAILABLE = True
+except ImportError:
+    U2_AVAILABLE = False
+    u2 = None
+
 # 导入 OCR 工具
 try:
     from ..utils.ocr_helper import get_ocr_helper
@@ -81,6 +89,10 @@ class UiFlowRunner:
         
         # OCR 工具（延迟初始化）
         self._ocr_helper = None
+        
+        # uiautomator2 设备会话（延迟初始化）
+        self._u2_device = None
+        self._u2_device_id = None
         
         logger.info(f"初始化UiFlowRunner，图片目录: {self.image_base_dir}")
     
@@ -439,6 +451,11 @@ class UiFlowRunner:
             except Exception:
                 logger.exception("Allure 截图附件写入失败: %s", path)
     
+    def set_device_id(self, device_id: str):
+        """设置当前执行的设备ID（用于 uiautomator2 连接）"""
+        self._execution_device_id = device_id
+        logger.info(f"设置执行设备ID: {device_id}")
+    
     def _resolve_selector(self, step: Dict[str, Any]) -> Any:
         """
         解析选择器
@@ -497,6 +514,26 @@ class UiFlowRunner:
             logger.warning(f"无效的区域格式: {selector}")
             return None
         
+        elif selector_type == 'uiautomator':
+            # UI层级定位选择器（在步骤中直接配置，无需数据库元素）
+            locator_type = step.get('locator_type', 'resource_id')
+            locator_value = step.get('locator_value', '')
+            if not locator_value:
+                logger.warning(f"uiautomator 选择器的 locator_value 为空")
+                return None
+            return {
+                '__type__': 'uiautomator',
+                'locator_type': locator_type,
+                'locator_value': locator_value,
+                'fallback_locators': step.get('fallback_locators', []),
+                'bounds': None,
+                'class_name': '',
+                'text': '',
+                'content_desc': '',
+                'device_id': getattr(self, '_execution_device_id', None),
+                'element_name': step.get('name', ''),
+            }
+        
         logger.warning(f"未知的选择器类型: {selector_type}")
         return None
     
@@ -541,25 +578,211 @@ class UiFlowRunner:
                 y2 = element.config.get('y2')
                 return (x1, y1, x2, y2)
             
+            elif element.element_type == 'uiautomator':
+                config = element.config
+                return {
+                    '__type__': 'uiautomator',
+                    'locator_type': config.get('locator_type', 'resource_id'),
+                    'locator_value': config.get('locator_value', ''),
+                    'fallback_locators': config.get('fallback_locators', []),
+                    'bounds': config.get('bounds'),
+                    'class_name': config.get('class_name', ''),
+                    'text': config.get('text', ''),
+                    'content_desc': config.get('content_desc', ''),
+                    'device_id': getattr(self, '_execution_device_id', None),
+                    'element_name': element.name,
+                }
+            
         except Exception as e:
             logger.error(f"解析元素失败: element_id={element_id}, 错误: {e}", exc_info=True)
             return None
     
-    def _action_touch(self, step: Dict[str, Any]):
-        """点击动作"""
+    def _get_u2_device(self, device_id: str):
+        """获取或创建 uiautomator2 设备会话"""
+        if not U2_AVAILABLE:
+            raise RuntimeError("uiautomator2 未安装，请执行: pip install uiautomator2")
+        
+        if self._u2_device is None or self._u2_device_id != device_id:
+            logger.info(f"连接 uiautomator2 设备: {device_id}")
+            self._u2_device = u2.connect(device_id)
+            self._u2_device_id = device_id
+        return self._u2_device
+    
+    def _try_locate_u2(self, d, locator_type: str, value: str):
+        """使用 uiautomator2 尝试单一定位策略，返回找到的元素或 None"""
+        try:
+            if locator_type == 'resource_id':
+                elem = d(resourceId=value)
+            elif locator_type == 'text':
+                elem = d(text=value)
+            elif locator_type == 'class_name':
+                elem = d(className=value)
+            elif locator_type == 'xpath':
+                elem = d.xpath(value)
+            elif locator_type == 'content_desc':
+                elem = d(description=value)
+            else:
+                logger.warning(f"不支持的定位类型: {locator_type}")
+                return None
+            
+            if elem.exists:
+                return elem
+        except Exception as e:
+            logger.debug(f"定位策略 {locator_type}={value} 失败: {e}")
+        
+        return None
+    
+    def _locate_uiautomator_element(self, locator_info: dict):
+        """
+        使用 uiautomator2 实时定位元素
+        
+        按优先级尝试：主定位策略 → 备选定位策略 → bounds 坐标降级
+        
+        Returns:
+            找到的 u2 元素对象，或坐标元组 (x, y)（降级方案），或 None
+        """
+        device_id = locator_info.get('device_id')
+        if not device_id:
+            logger.error("uiautomator 元素缺少 device_id")
+            return None
+        
+        d = self._get_u2_device(device_id)
+        
+        locator_type = locator_info.get('locator_type', 'resource_id')
+        locator_value = locator_info.get('locator_value', '')
+        
+        # 尝试主定位策略
+        element = self._try_locate_u2(d, locator_type, locator_value)
+        
+        # 如果主策略失败，尝试备选定位
+        if element is None:
+            for fallback in locator_info.get('fallback_locators', []):
+                fb_type = fallback.get('type', '')
+                fb_value = fallback.get('value', '')
+                if fb_type and fb_value:
+                    element = self._try_locate_u2(d, fb_type, fb_value)
+                    if element:
+                        logger.info(f"使用备选定位成功: {fb_type}={fb_value}")
+                        break
+        
+        # 最终降级：使用存储的 bounds 中心坐标
+        if element is None and locator_info.get('bounds'):
+            bounds = locator_info['bounds']
+            if len(bounds) >= 4:
+                cx = (bounds[0] + bounds[2]) // 2
+                cy = (bounds[1] + bounds[3]) // 2
+                logger.info(f"所有定位策略失败，降级为坐标点击: ({cx}, {cy})")
+                return (cx, cy)
+        
+        return element
+    
+    def _resolve_and_locate(self, step: Dict[str, Any]):
+        """
+        统一解析选择器并定位元素
+        
+        对于 image/pos/region 类型，返回 Airtest 兼容对象
+        对于 uiautomator 类型，返回 u2 元素对象或坐标元组
+        """
         target = self._resolve_selector(step)
         if target is None:
+            return None
+        
+        # uiautomator 元素需要实时定位
+        if isinstance(target, dict) and target.get('__type__') == 'uiautomator':
+            return self._locate_uiautomator_element(target)
+        
+        return target
+    
+    def _is_uiautomator_target(self, target) -> bool:
+        """判断目标是否是 uiautomator2 元素（非 Airtest 原生类型）"""
+        if target is None:
+            return False
+        if isinstance(target, tuple):
+            return False
+        if isinstance(target, Template):
+            return False
+        # u2 元素对象或坐标降级元组(经 _locate_uiautomator_element 返回的降级坐标)
+        # 注意：_locate_uiautomator_element 返回的 None/元素/坐标 中，坐标已是普通元组
+        # 所以这里判断是否有 u2 相关属性
+        return hasattr(target, 'click') and hasattr(target, 'exists')
+    
+    def _exec_action_on_target(self, step: Dict[str, Any], action_type: str):
+        """
+        在解析后的目标上执行动作（兼容 uiautomator 和 Airtest 目标）
+        
+        Args:
+            step: 步骤配置
+            action_type: click | double_click | long_press | exists | wait
+        
+        Returns:
+            exists 类型返回 bool，其他返回 True
+        """
+        target = self._resolve_and_locate(step)
+        if target is None:
             step_name = step.get('name', step.get('type', 'unknown'))
-            raise ValueError(f"步骤 '{step_name}' 无法解析选择器，请检查元素配置（selector 或 element_id）")
-        logger.info(f"执行点击: {target}")
-        touch(target)
+            raise ValueError(f"步骤 '{step_name}' 无法解析选择器")
+        
+        step_name = step.get('name', step.get('type', 'unknown'))
+        
+        # 判断是否为 uiautomator2 定位目标
+        if self._is_uiautomator_target(target):
+            logger.info(f"uiautomator [{step_name}] 执行 {action_type}")
+            if action_type == 'click':
+                target.click()
+            elif action_type == 'double_click':
+                target.click()
+                time.sleep(0.1)
+                target.click()
+            elif action_type == 'long_press':
+                duration = step.get('duration', 2)
+                target.long_click(duration=duration)
+            elif action_type == 'wait':
+                timeout = step.get('timeout', step.get('duration', 3))
+                target.wait(timeout=timeout)
+            elif action_type == 'exists':
+                return target.exists
+            return True
+        
+        # 坐标降级（从 _locate_uiautomator_element 返回的 tuple）
+        if isinstance(target, tuple) and len(target) == 2:
+            cx, cy = target
+            logger.info(f"uiautomator [{step_name}] 降级坐标执行 {action_type}: ({cx}, {cy})")
+            if action_type == 'click':
+                touch((cx, cy))
+            elif action_type == 'double_click':
+                double_click((cx, cy))
+            elif action_type == 'long_press':
+                duration = step.get('duration', 2)
+                touch((cx, cy), duration=duration)
+            elif action_type == 'wait':
+                sleep(step.get('timeout', step.get('duration', 3)))
+            elif action_type == 'exists':
+                return False  # 降级坐标无法判断存在性
+            return True
+        
+        # Airtest 原生目标
+        logger.info(f"Airtest [{step_name}] 执行 {action_type}: {target}")
+        if action_type == 'click':
+            touch(target)
+        elif action_type == 'double_click':
+            double_click(target)
+        elif action_type == 'long_press':
+            duration = step.get('duration', 2)
+            touch(target, duration=duration)
+        elif action_type == 'wait':
+            timeout = step.get('timeout', step.get('duration', 3))
+            wait(target, timeout=timeout)
+        elif action_type == 'exists':
+            return exists(target) is not None
+        return True
+    
+    def _action_touch(self, step: Dict[str, Any]):
+        """点击动作"""
+        self._exec_action_on_target(step, 'click')
     
     def _action_double_click(self, step: Dict[str, Any]):
         """双击动作"""
-        target = self._resolve_selector(step)
-        if target:
-            logger.info(f"执行双击: {target}")
-            double_click(target)
+        self._exec_action_on_target(step, 'double_click')
     
     def _action_swipe(self, step: Dict[str, Any]):
         """滑动动作"""
@@ -604,8 +827,18 @@ class UiFlowRunner:
         timeout = step.get('timeout', step.get('duration', 3))
         
         if target:
-            logger.info(f"等待元素出现: {target}, 超时: {timeout}s")
-            wait(target, timeout=timeout)
+            # 对于 uiautomator 元素，使用专用等待
+            if isinstance(target, dict) and target.get('__type__') == 'uiautomator':
+                u2_target = self._locate_uiautomator_element(target)
+                if u2_target is None:
+                    raise ValueError(f"等待 uiautomator 元素失败: 元素未找到")
+                if self._is_uiautomator_target(u2_target):
+                    u2_target.wait(timeout=timeout)
+                elif isinstance(u2_target, tuple):
+                    sleep(timeout)
+            else:
+                logger.info(f"等待元素出现: {target}, 超时: {timeout}s")
+                wait(target, timeout=timeout)
         else:
             logger.info(f"等待 {timeout} 秒")
             sleep(timeout)
@@ -831,11 +1064,10 @@ class UiFlowRunner:
         logger.info(f"范围断言成功: 实际值 {actual_num} 在范围 {range_desc} 内")
     
     def _assert_exists(self, step: Dict[str, Any]):
-        """存在性断言：判断图片元素是否存在于屏幕上"""
-        target = self._resolve_selector(step)
+        """存在性断言：判断元素是否存在于屏幕上（兼容 image/pos/region/uiautomator）"""
         expected_exists = step.get('expected_exists', True)
         
-        result = exists(target) is not None
+        result = self._exec_action_on_target(step, 'exists')
         
         if expected_exists and not result:
             raise AssertionError(f"期望元素存在，但实际不存在")
@@ -884,8 +1116,19 @@ class UiFlowRunner:
         send_enter = step.get('send_enter', False)
         
         if target:
-            touch(target)
-            time.sleep(0.3)
+            # 对于 uiautomator 元素，使用 u2 定位后点击
+            if isinstance(target, dict) and target.get('__type__') == 'uiautomator':
+                u2_target = self._locate_uiautomator_element(target)
+                if u2_target is None:
+                    raise ValueError(f"输入文本前无法定位 uiautomator 元素")
+                if self._is_uiautomator_target(u2_target):
+                    u2_target.click()
+                elif isinstance(u2_target, tuple):
+                    touch(u2_target)
+                time.sleep(0.3)
+            else:
+                touch(target)
+                time.sleep(0.3)
         
         logger.info(f"输入文本: {value}")
         airtest_text(value)
@@ -904,12 +1147,7 @@ class UiFlowRunner:
     
     def _action_long_press(self, step: Dict[str, Any]):
         """长按"""
-        target = self._resolve_selector(step)
-        duration = step.get('duration', 2)
-        
-        if target:
-            logger.info(f"长按: {target}, 时长: {duration}秒")
-            touch(target, duration=duration)
+        self._exec_action_on_target(step, 'long_press')
     
     def _action_drag(self, step: Dict[str, Any]):
         """拖拽：从起点拖拽到终点"""
