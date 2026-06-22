@@ -499,11 +499,11 @@ const canSave = computed(() => {
   return false
 })
 
-// 加载设备列表
+// 加载设备列表（排除离线设备，只显示可用的）
 const loadDevices = async () => {
   devicesLoading.value = true
   try {
-    const { data } = await getDeviceList()
+    const { data } = await getDeviceList({ status: 'online,available,locked', page_size: 1000 })
     devices.value = data.results || []
   } catch (error) {
     console.error('加载设备列表失败:', error)

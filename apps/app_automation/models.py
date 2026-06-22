@@ -62,6 +62,38 @@ class AppTestConfig(models.Model):
         return f"APP测试配置 (ADB: {self.adb_path})"
 
 
+class AgentHost(models.Model):
+    """远程设备代理主机 - 运行 adb_agent 的物理/虚拟机"""
+    STATUS_CHOICES = [
+        ('online', '在线'),
+        ('offline', '离线'),
+    ]
+
+    host_id = models.CharField(max_length=64, unique=True, verbose_name='主机ID')
+    hostname = models.CharField(max_length=255, blank=True, default='', verbose_name='主机名')
+    ip_address = models.GenericIPAddressField(verbose_name='IP地址')
+    port = models.IntegerField(default=0, verbose_name='WebSocket端口')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='online', verbose_name='状态')
+    version = models.CharField(max_length=50, blank=True, default='', verbose_name='Agent版本')
+    device_count = models.IntegerField(default=0, verbose_name='已注册设备数')
+    extra_info = models.JSONField(default=dict, blank=True, verbose_name='额外信息', help_text='OS, Python版本等')
+    last_seen = models.DateTimeField(auto_now=True, verbose_name='最后活跃时间')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='首次连接时间')
+
+    class Meta:
+        db_table = 'app_agent_hosts'
+        verbose_name = 'Agent主机'
+        verbose_name_plural = 'Agent主机'
+        ordering = ['-last_seen']
+        indexes = [
+            models.Index(fields=['host_id']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.hostname} ({self.ip_address})"
+
+
 class AppDevice(models.Model):
     """Android 设备模型 - 整合了设备管理功能"""
     STATUS_CHOICES = [
@@ -75,6 +107,9 @@ class AppDevice(models.Model):
         ('emulator', '本地模拟器'),
         ('remote_emulator', '远程模拟器'),
         ('real_device', '真实设备'),
+        ('agent_device', 'Agent代理设备'),
+        ('usb', 'USB连接'),
+        ('remote', '远程连接'),
     ]
     
     device_id = models.CharField(max_length=255, unique=True, verbose_name='设备序列号')
@@ -84,6 +119,23 @@ class AppDevice(models.Model):
     connection_type = models.CharField(max_length=20, choices=CONNECTION_TYPE_CHOICES, default='emulator', verbose_name='连接类型')
     ip_address = models.CharField(max_length=50, blank=True, default='', verbose_name='IP地址')
     port = models.IntegerField(default=5555, verbose_name='端口')
+    
+    # Agent 代理设备关联
+    agent_host = models.ForeignKey(
+        AgentHost,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='devices',
+        verbose_name='所属Agent主机'
+    )
+    agent_device_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        verbose_name='Agent本地设备ID',
+        help_text='Agent主机上的原始 device_id（如 emulator-5554）'
+    )
     
     # 设备锁定相关字段
     locked_by = models.ForeignKey(

@@ -163,6 +163,44 @@ export function connectDevice(data) {
 }
 
 
+// ========== Agent 主机管理 ==========
+
+/**
+ * 获取 Agent 主机列表
+ */
+export function getAgentHosts(params) {
+  return request({
+    url: '/app-automation/devices/agent-hosts/',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 请求所有 Agent 同步设备列表
+ */
+export function agentSync() {
+  return request({
+    url: '/app-automation/devices/agent-sync/',
+    method: 'post'
+  })
+}
+
+/**
+ * 获取 Agent 脚本下载地址
+ */
+export function getAgentDownloadUrl() {
+  return '/api/app-automation/agent/download/'
+}
+
+/**
+ * 获取 Agent 依赖文件下载地址
+ */
+export function getAgentRequirementsUrl() {
+  return '/api/app-automation/agent/requirements/'
+}
+
+
 // ========== 元素管理 ==========
 
 /**

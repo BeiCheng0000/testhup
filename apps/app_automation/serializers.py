@@ -4,6 +4,7 @@ from django.utils import timezone
 from .models import (
     AppProject,
     AppTestConfig,
+    AgentHost,
     AppDevice,
     AppElement,
     AppComponent,
@@ -74,9 +75,23 @@ class AppTestConfigSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
+class AgentHostSerializer(serializers.ModelSerializer):
+    """Agent主机序列化器"""
+    device_count_display = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = AgentHost
+        fields = '__all__'
+        read_only_fields = ('created_at',)
+    
+    def get_device_count_display(self, obj):
+        return obj.devices.filter(status__in=['online', 'available', 'locked']).count()
+
+
 class AppDeviceSerializer(serializers.ModelSerializer):
     """APP设备序列化器"""
     locked_by_name = serializers.SerializerMethodField()
+    agent_host_info = serializers.SerializerMethodField()
     
     class Meta:
         model = AppDevice
@@ -85,6 +100,17 @@ class AppDeviceSerializer(serializers.ModelSerializer):
     
     def get_locked_by_name(self, obj):
         return obj.locked_by.username if obj.locked_by else None
+    
+    def get_agent_host_info(self, obj):
+        """返回 Agent 主机摘要信息"""
+        if obj.agent_host:
+            return {
+                'host_id': obj.agent_host.host_id,
+                'hostname': obj.agent_host.hostname,
+                'ip_address': obj.agent_host.ip_address,
+                'status': obj.agent_host.status,
+            }
+        return None
 
 
 class AppElementSerializer(serializers.ModelSerializer):

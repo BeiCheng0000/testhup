@@ -314,7 +314,7 @@ const loadOptions = async () => {
     const [s, tc, d, p] = await Promise.all([
       getTestSuiteList({ page_size: 200 }),
       getTestCaseList({ page_size: 500 }),
-      getDeviceList({ page_size: 100 }),
+      getDeviceList({ status: 'online,available,locked', page_size: 100 }),
       getPackageList({ page_size: 100 }),
     ])
     suites.value = s.data.results || s.data || []

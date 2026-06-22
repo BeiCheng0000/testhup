@@ -309,12 +309,11 @@ CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Channels Configuration
+# 使用 InMemoryChannelLayer 代替 Redis，避免 Windows 旧版 Redis 不支持 BZPOPMIN 的问题
+# 注意：仅在单进程部署时有效；多进程部署需要升级 Redis 到 5.0+ 并切换回 RedisChannelLayer
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [REDIS_URL],
-        },
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
 

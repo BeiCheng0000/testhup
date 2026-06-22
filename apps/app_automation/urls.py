@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from django.urls import path, include
+from django.http import FileResponse, Http404
+from django.conf import settings
+import os
 from .views.execution_views import serve_report_file
 from rest_framework.routers import DefaultRouter
 
@@ -19,6 +22,35 @@ from .views import (
     AppTestExecutionViewSet,
     AppDashboardViewSet,
 )
+
+
+def download_agent(request):
+    """下载 ADB Agent 脚本 - 供远程主机一键获取"""
+    agent_path = os.path.join(settings.BASE_DIR, 'adb_agent.py')
+    if not os.path.exists(agent_path):
+        raise Http404('Agent 脚本文件不存在')
+    response = FileResponse(
+        open(agent_path, 'rb'),
+        content_type='text/plain; charset=utf-8',
+        as_attachment=True,
+        filename='adb_agent.py'
+    )
+    return response
+
+
+def download_agent_requirements(request):
+    """下载 Agent 依赖文件"""
+    req_path = os.path.join(settings.BASE_DIR, 'requirements-agent.txt')
+    if not os.path.exists(req_path):
+        raise Http404('Agent 依赖文件不存在')
+    response = FileResponse(
+        open(req_path, 'rb'),
+        content_type='text/plain; charset=utf-8',
+        as_attachment=True,
+        filename='requirements-agent.txt'
+    )
+    return response
+
 
 router = DefaultRouter()
 
@@ -42,4 +74,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('executions/<int:execution_id>/report/', serve_report_file, name='app-execution-report'),
     path('executions/<int:execution_id>/report/<path:file_path>', serve_report_file, name='app-execution-report-file'),
+    # Agent 下载端点
+    path('agent/download/', download_agent, name='download-agent'),
+    path('agent/requirements/', download_agent_requirements, name='download-agent-requirements'),
 ]

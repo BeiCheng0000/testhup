@@ -1,25 +1,68 @@
 # -*- coding: utf-8 -*-
 """APP设备管理视图"""
-import subprocess
+import asyncio
+import os
 import base64
+import gzip
+import threading
+import datetime
+import platform
+import tempfile
+import xml.etree.ElementTree as ET
+import logging
+
+import subprocess
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-import logging
-import platform
-import tempfile
-import os
-import xml.etree.ElementTree as ET
+import django_filters
 
 from .test_case_views import AppPagination
-from ..models import AppDevice
-from ..serializers import AppDeviceSerializer
+from ..models import AppDevice, AgentHost
+from ..serializers import AppDeviceSerializer, AgentHostSerializer
 from ..managers.device_manager import DeviceManager
 
 logger = logging.getLogger(__name__)
+
+
+def get_async_loop():
+    """获取或创建事件循环，用于在同步代码中运行 async 函数"""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        return loop
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
+
+
+class AppDeviceFilter(django_filters.FilterSet):
+    """设备过滤器：支持逗号分隔的多值状态筛选（如 status=online,available）"""
+    status = django_filters.CharFilter(method='filter_status', label='设备状态')
+    agent_host_id = django_filters.CharFilter(field_name='agent_host__host_id', lookup_expr='exact', label='Agent主机ID')
+    has_agent = django_filters.BooleanFilter(method='filter_has_agent', label='是否有Agent')
+    
+    class Meta:
+        model = AppDevice
+        fields = ['status', 'connection_type']
+    
+    def filter_status(self, queryset, name, value):
+        if value:
+            status_list = [s.strip() for s in value.split(',') if s.strip()]
+            if status_list:
+                return queryset.filter(status__in=status_list)
+        return queryset
+    
+    def filter_has_agent(self, queryset, name, value):
+        if value:
+            return queryset.exclude(agent_host__isnull=True)
+        return queryset.filter(agent_host__isnull=True)
 
 # 尝试导入 uiautomator2（类似 weditor 的元素获取方式）
 try:
@@ -44,6 +87,55 @@ def get_adb_path() -> str:
         return 'adb'
 
 
+def _decompress_if_needed(data: dict) -> dict:
+    """解压 Agent 返回的 gzip 压缩数据（兼容未压缩的旧数据）
+    
+    Agent 可能在 data 中标记 compressed='gzip' 表示内容经过 gzip 压缩。
+    对于 xml_compressed='gzip' 的 XML 字段也会自动解压。
+    """
+    if not isinstance(data, dict):
+        return data
+    
+    # 解压截图内容（content 字段中的 base64 数据）
+    content = data.get('content', '')
+    if content and data.get('compressed') == 'gzip':
+        try:
+            # 格式: data:image/png;base64,<gzip+base64>
+            prefix = ''
+            payload = content
+            if ',' in content:
+                parts = content.split(',', 1)
+                prefix = parts[0] + ','
+                payload = parts[1]
+            decoded = gzip.decompress(base64.b64decode(payload))
+            data['content'] = prefix + base64.b64encode(decoded).decode('utf-8')
+            data['compressed'] = False  # 已解压
+        except Exception as e:
+            logger.warning(f"截图解压失败，保留原始数据: {e}")
+    
+    # 解压 XML
+    xml_content = data.get('xml', '')
+    if xml_content and data.get('xml_compressed') == 'gzip':
+        try:
+            decoded = gzip.decompress(base64.b64decode(xml_content))
+            data['xml'] = decoded.decode('utf-8', errors='replace')
+            data['xml_compressed'] = False
+        except Exception as e:
+            logger.warning(f"XML 解压失败，保留原始数据: {e}")
+    
+    # 解压 screenshot 字段 (dump_hierarchy 中的截图)
+    screenshot_b64 = data.get('screenshot', '')
+    if screenshot_b64 and data.get('screenshot_compressed') == 'gzip':
+        try:
+            decoded = gzip.decompress(base64.b64decode(screenshot_b64))
+            data['screenshot'] = base64.b64encode(decoded).decode('utf-8')
+            data['screenshot_compressed'] = False
+        except Exception as e:
+            logger.warning(f"层级截图解压失败，保留原始数据: {e}")
+    
+    return data
+
+
 class AppDeviceViewSet(viewsets.ModelViewSet):
     """APP设备管理 ViewSet"""
     queryset = AppDevice.objects.all()
@@ -51,12 +143,182 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = AppPagination
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'connection_type']
+    filterset_class = AppDeviceFilter
     search_fields = ['device_id', 'name']
+    
+    # 设备状态同步缓存（避免频繁调用ADB）
+    _last_device_sync = None
+    _sync_lock = threading.Lock()
+    _SYNC_INTERVAL = datetime.timedelta(seconds=10)
+    
+    @classmethod
+    def _sync_device_status(cls):
+        """通过ADB同步设备在线状态，带缓存避免频繁调用
+        
+        注意：Agent 代理设备的 device_id 格式为 "agent:<host_id>:<local_device_id>"，
+        与本地 ADB 返回的 device_id 不匹配，因此需排除 Agent 设备，仅同步本地 ADB 设备。
+        Agent 设备的状态由 WebSocket device_sync 消息独立管理。
+        """
+        now = timezone.now()
+        
+        # 如果上次同步在 SYNC_INTERVAL 内，跳过
+        if cls._last_device_sync and (now - cls._last_device_sync) < cls._SYNC_INTERVAL:
+            return
+        
+        # 使用线程锁防止并发重复执行
+        if not cls._sync_lock.acquire(blocking=False):
+            return
+        
+        try:
+            # 再次检查（双重检查锁）
+            if cls._last_device_sync and (now - cls._last_device_sync) < cls._SYNC_INTERVAL:
+                return
+            
+            adb_path = get_adb_path()
+            manager = DeviceManager(adb_path=adb_path)
+            
+            try:
+                devices_info = manager.list_devices()
+                online_device_ids = {d['device_id'] for d in devices_info}
+                logger.info(f"ADB 在线设备: {online_device_ids}")
+            except Exception as e:
+                logger.warning(f"ADB 查询在线设备失败（暂不更新状态）: {e}")
+                return
+            
+            # 统计变更
+            changes_made = 0
+            
+            # 1. 数据库中标记为 online/available 但 ADB 中不存在的 → 标记为 offline
+            #    （排除 Agent 代理设备和已锁定设备）
+            db_online = AppDevice.objects.filter(
+                status__in=['online', 'available'],
+                agent_host__isnull=True  # Agent 设备状态由 WebSocket 管理，不通过本地 ADB 同步
+            )
+            for device in db_online:
+                if device.device_id not in online_device_ids:
+                    device.status = 'offline'
+                    device.save(update_fields=['status', 'updated_at'])
+                    changes_made += 1
+                    logger.info(f"设备 {device.device_id} 已离线（ADB中未找到）")
+            
+            # 2. 数据库中标记为 offline 但 ADB 中存在的 → 标记为 online
+            #    （排除 Agent 代理设备）
+            db_offline = AppDevice.objects.filter(
+                device_id__in=online_device_ids, status='offline',
+                agent_host__isnull=True  # Agent 设备状态由 WebSocket 管理
+            )
+            for device in db_offline:
+                device.status = 'online'
+                device.save(update_fields=['status', 'updated_at'])
+                changes_made += 1
+                logger.info(f"设备 {device.device_id} 已上线（ADB中检测到）")
+            
+            if changes_made > 0:
+                logger.info(f"设备状态同步完成，变更 {changes_made} 台设备")
+            
+            cls._last_device_sync = now
+            
+        finally:
+            cls._sync_lock.release()
+    
+    def list(self, request, *args, **kwargs):
+        """获取设备列表，自动同步ADB在线状态"""
+        try:
+            self._sync_device_status()
+            self._sync_agent_devices()
+        except Exception as e:
+            logger.warning(f"同步设备状态失败（继续返回数据库状态）: {e}")
+        return super().list(request, *args, **kwargs)
+    
+    @classmethod
+    def _sync_agent_devices(cls):
+        """同步 Agent 设备状态：检查 Agent 是否仍在线"""
+        now = timezone.now()
+        threshold = now - datetime.timedelta(seconds=60)
+        
+        # 检查超时的 Agent 主机
+        stale_hosts = AgentHost.objects.filter(
+            status='online',
+            last_seen__lt=threshold
+        )
+        if stale_hosts.exists():
+            for host in stale_hosts:
+                device_cnt = host.device_count
+                hostname = host.hostname
+                # 标记该主机的设备为离线（解除 agent_host 关联）
+                AppDevice.objects.filter(
+                    agent_host=host
+                ).exclude(status='locked').update(
+                    status='offline',
+                    agent_host=None
+                )
+                host.delete()
+                logger.info(f"Agent {hostname} 超时，已删除，{device_cnt} 台设备离线")
+    
+    # ---- Agent 主机管理 ----
+    
+    @action(detail=False, methods=['get'], url_path='agent-hosts')
+    def agent_hosts(self, request):
+        """获取在线 Agent 主机列表（离线主机不保存、不显示）"""
+        hosts = AgentHost.objects.filter(status='online')
+        serializer = AgentHostSerializer(hosts, many=True)
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'count': hosts.count(),
+        })
+    
+    @action(detail=False, methods=['post'], url_path='agent-sync')
+    def agent_sync(self, request):
+        """请求所有 Agent 同步设备列表"""
+        from ..managers.agent_registry import agent_registry
+        
+        agents = agent_registry.list_active_agents()
+        if not agents:
+            return Response({
+                'success': False,
+                'message': '没有活跃的 Agent 连接',
+            })
+        
+        agent_registry.broadcast_sync({
+            "type": "sync_devices",
+            "message": "服务器请求同步设备列表",
+        })
+        
+        return Response({
+            'success': True,
+            'message': f'已向 {len(agents)} 个 Agent 发送同步请求',
+            'agent_count': len(agents),
+        })
+    
+    # ---- Agent 设备操作（截图/层级通过 Agent WebSocket 中继） ----
+    
+    def _is_agent_device(self, device):
+        """判断是否为 Agent 代理设备（仅检查 agent_host 关联）"""
+        return device.agent_host is not None
+    
+    def _agent_exec_command(self, device, command_type, **kwargs):
+        """通过 Agent WebSocket 执行设备命令并等待结果（同步方法）"""
+        from ..managers.agent_registry import agent_registry
+        host_id = device.agent_host.host_id
+        
+        conn = agent_registry.get_by_host_id(host_id)
+        if not conn or not conn.is_alive():
+            raise ConnectionError(f"Agent {host_id} 未连接或已离线")
+        
+        message = {
+            "type": "exec_command",
+            "command_type": command_type,
+            "device_id": device.agent_device_id or device.device_id,
+            "adb_path": kwargs.get("adb_path", "adb"),
+        }
+        message.update(kwargs)
+        
+        return agent_registry.send_and_wait(host_id, message, timeout=kwargs.get("timeout", 30))
     
     @action(detail=False, methods=['get'])
     def discover(self, request):
-        """发现ADB设备"""
+        """发现ADB设备（同时触发Agent主机设备同步）"""
         try:
             adb_path = get_adb_path()
             logger.info(f"使用 ADB 路径: {adb_path}")
@@ -95,11 +357,60 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
                 )
                 db_devices.append(device)
             
-            # 返回序列化后的数据库对象
+            # 标记ADB中不存在的设备为离线（不含已锁定设备和Agent设备）
+            adb_device_ids = {d['device_id'] for d in devices_info}
+            offline_count = AppDevice.objects.exclude(
+                device_id__in=adb_device_ids
+            ).exclude(
+                status='locked'
+            ).filter(
+                status__in=['online', 'available'],
+                agent_host__isnull=True  # Agent 设备状态由 WebSocket 管理
+            ).update(status='offline')
+            if offline_count > 0:
+                logger.info(f"discover: 标记 {offline_count} 台设备为离线")
+            
+            # ===== 触发 Agent 主机设备同步 =====
+            from ..managers.agent_registry import agent_registry
+            agents = agent_registry.list_active_agents()
+            agent_sync_msg = ''
+            if agents:
+                try:
+                    agent_registry.broadcast_sync({
+                        "type": "sync_devices",
+                        "message": "服务器请求同步设备列表",
+                    })
+                    agent_sync_msg = f'，已向 {len(agents)} 个 Agent 主机发送同步请求'
+                    logger.info(f"discover: 已向 {len(agents)} 个 Agent 发送同步请求")
+                except Exception as e:
+                    logger.warning(f"discover: Agent 同步请求发送失败: {e}")
+            
+            # ===== 统计 Agent 主机和设备数量 =====
+            agent_device_count = AppDevice.objects.filter(
+                agent_host__isnull=False
+            ).exclude(status='offline').count()
+            
+            agent_host_count = AgentHost.objects.filter(status='online').count()
+            
+            # 更新同步时间
+            AppDeviceViewSet._last_device_sync = timezone.now()
+            
+            # 构造消息
+            parts = [f'发现 {len(db_devices)} 个本地设备']
+            if agent_device_count > 0:
+                parts.append(f'{agent_device_count} 个Agent设备')
+            if agent_host_count > 0:
+                parts.append(f'({agent_host_count} 个Agent主机在线)')
+            msg = '，'.join(parts) + agent_sync_msg
+            
             return Response({
                 'success': True,
-                'message': f'发现 {len(db_devices)} 个设备',
-                'devices': AppDeviceSerializer(db_devices, many=True).data
+                'message': msg,
+                'devices': AppDeviceSerializer(db_devices, many=True).data,
+                'total_devices': len(db_devices) + agent_device_count,
+                'local_device_count': len(db_devices),
+                'agent_device_count': agent_device_count,
+                'agent_host_count': agent_host_count,
             })
         except Exception as e:
             logger.error(f"发现设备失败: {str(e)}")
@@ -231,11 +542,12 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
     def screenshot(self, request, pk=None):
         """
         获取设备实时截图
-        
+
         功能：
-        1. 使用 adb screencap 获取设备截图
-        2. 转换为 Base64
-        3. 返回 data URL 格式
+        1. 本地/远程设备：使用 adb screencap 获取设备截图
+        2. Agent 代理设备：通过 Agent WebSocket 中继截图命令
+        3. 转换为 Base64
+        4. 返回 data URL 格式
         """
         device = self.get_object()
         
@@ -246,22 +558,24 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
                 'success': False
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Agent 代理设备：通过 WebSocket 中继
+        if self._is_agent_device(device):
+            return self._agent_screenshot(device)
+        
+        # 本地/远程设备：直接 ADB
         try:
             adb_path = get_adb_path()
             
-            # 对远程设备，确保 device_id 是 IP:port 格式
             device_id = device.device_id
             if device.connection_type in ['remote_emulator', 'remote']:
                 if ':' not in device_id:
                     device_id = f"{device.ip_address}:{device.port}"
                     logger.info(f"远程设备使用地址: {device_id}")
             
-            # Windows 子进程创建标志
             kwargs = {}
             if platform.system() == 'Windows':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
             
-            # 使用 adb screencap 命令截图
             result = subprocess.run(
                 [adb_path, '-s', device_id, 'exec-out', 'screencap', '-p'],
                 stdout=subprocess.PIPE,
@@ -279,9 +593,7 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
                     'success': False
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # 转换为 Base64
             image_base64 = base64.b64encode(result.stdout).decode('utf-8')
-            
             logger.info(f"设备 {device_id} 截图成功，大小: {len(result.stdout)} bytes")
             
             return Response({
@@ -326,6 +638,50 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
                 'msg': f'截图失败: {str(e)}',
                 'success': False
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _agent_screenshot(self, device):
+        """通过 Agent WebSocket 获取 Agent 代理设备的截图"""
+        try:
+            result = self._agent_exec_command(device, 'screenshot', timeout=25)
+            if result.get('success'):
+                data = _decompress_if_needed(result.get('data', {}))
+                return Response({
+                    'code': 0,
+                    'msg': '截图成功 (Agent)',
+                    'success': True,
+                    'data': {
+                        'filename': f"agent_device_{device.id}_{int(timezone.now().timestamp())}.png",
+                        'content': data.get('content', ''),
+                        'device_id': device.device_id,
+                        'timestamp': int(timezone.now().timestamp()),
+                        'via_agent': device.agent_host.hostname if device.agent_host else 'unknown',
+                    }
+                })
+            else:
+                return Response({
+                    'code': 500,
+                    'msg': f'Agent 截图失败: {result.get("message", "未知错误")}',
+                    'success': False
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ConnectionError as e:
+            return Response({
+                'code': 503,
+                'msg': f'Agent 连接失败: {str(e)}',
+                'success': False
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except TimeoutError:
+            return Response({
+                'code': 500,
+                'msg': 'Agent 截图超时 (25s)',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            logger.error(f"Agent 截图失败: {str(e)}")
+            return Response({
+                'code': 500,
+                'msg': f'Agent 截图异常: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], url_path='dump-hierarchy')
     def dump_hierarchy(self, request, pk=None):
@@ -360,6 +716,11 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
                 'msg': '设备离线，无法获取层级信息',
                 'success': False
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Agent 代理设备：通过 WebSocket 中继
+        if self._is_agent_device(device):
+            skip_screenshot = request.query_params.get('skip_screenshot', '') in ('1', 'true', 'True')
+            return self._agent_dump_hierarchy(device, request, skip_screenshot=skip_screenshot)
         
         skip_screenshot = request.query_params.get('skip_screenshot', '') in ('1', 'true', 'True')
         
@@ -955,3 +1316,101 @@ class AppDeviceViewSet(viewsets.ModelViewSet):
                 )
             except Exception:
                 pass
+    
+    def _agent_dump_hierarchy(self, device, request, skip_screenshot=False):
+        """通过 Agent WebSocket 获取 Agent 代理设备的 UI 层级"""
+        try:
+            result = self._agent_exec_command(
+                device, 'dump_hierarchy', 
+                timeout=45,
+                skip_screenshot=skip_screenshot
+            )
+            if not result.get('success'):
+                return Response({
+                    'code': 500,
+                    'msg': f'Agent 层级获取失败: {result.get("message", "未知错误")}',
+                    'success': False
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # 解压 gzip 数据（兼容旧版未压缩数据）
+            data = _decompress_if_needed(result.get('data', {}))
+            screenshot_base64 = data.get('screenshot', '')
+            screenshot_format = data.get('screenshot_format', 'png')
+            resolution = data.get('resolution', {'width': 0, 'height': 0})
+            xml_content = data.get('xml', '')
+            
+            if not xml_content:
+                return Response({
+                    'code': 500,
+                    'msg': 'Agent 未返回 UI 层级数据',
+                    'success': False
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # 解析 XML 提取元素
+            elements = []
+            try:
+                if isinstance(xml_content, bytes):
+                    xml_content = xml_content.decode('utf-8', errors='replace')
+                xml_content = xml_content.strip()
+                if not xml_content.startswith('<'):
+                    xml_start = xml_content.find('<?xml')
+                    if xml_start == -1:
+                        xml_start = xml_content.find('<hierarchy')
+                    if xml_start >= 0:
+                        xml_content = xml_content[xml_start:]
+                
+                root = ET.fromstring(xml_content)
+                if root.tag == 'hierarchy':
+                    for child in root:
+                        elements.extend(self._parse_hierarchy_nodes(child))
+                else:
+                    elements.extend(self._parse_hierarchy_nodes(root))
+                    
+            except ET.ParseError as pe:
+                logger.error(f"Agent XML 解析失败: {pe}")
+                return Response({
+                    'code': 500,
+                    'msg': f'UI层级 XML 解析失败: {str(pe)}',
+                    'success': False
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            logger.info(f"Agent 设备 {device.device_id} 层级获取成功，提取 {len(elements)} 个元素")
+            
+            response_data = {
+                'resolution': resolution,
+                'elements': elements,
+                'total_count': len(elements),
+                'via_agent': device.agent_host.hostname if device.agent_host else 'unknown',
+            }
+            if screenshot_base64:
+                if not screenshot_base64.startswith('data:'):
+                    mimetype = 'image/jpeg' if screenshot_format == 'jpeg' else 'image/png'
+                    screenshot_base64 = f"data:{mimetype};base64,{screenshot_base64}"
+                response_data['screenshot'] = screenshot_base64
+            
+            return Response({
+                'code': 0,
+                'msg': '层级获取成功 (Agent)',
+                'success': True,
+                'data': response_data
+            })
+            
+        except ConnectionError as e:
+            return Response({
+                'code': 503,
+                'msg': f'Agent 连接失败: {str(e)}',
+                'success': False
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except TimeoutError:
+            return Response({
+                'code': 500,
+                'msg': 'Agent 层级获取超时 (45s)',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            logger.error(f"Agent 层级获取失败: {str(e)}", exc_info=True)
+            return Response({
+                'code': 500,
+                'msg': f'Agent 层级获取异常: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

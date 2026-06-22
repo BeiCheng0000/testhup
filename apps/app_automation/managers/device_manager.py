@@ -228,3 +228,79 @@ class DeviceManager:
         except Exception as e:
             logger.error(f"断开设备失败: {str(e)}")
             return False
+
+    def enable_tcp_debug(self, device_id: str, tcp_port: int = 5555) -> bool:
+        """
+        为 USB 连接的设备启用 TCP/IP 调试模式
+        
+        使 USB 设备也可通过网络 ADB 访问（adb connect IP:PORT）
+        
+        Args:
+            device_id: 设备序列号（USB设备ID）
+            tcp_port: TCP 调试端口，默认 5555
+        
+        Returns:
+            是否成功启用
+        """
+        try:
+            logger.info(f"为设备 {device_id} 启用 TCP 调试模式: port={tcp_port}")
+            result = subprocess.run(
+                [self.adb_path, '-s', device_id, 'tcpip', str(tcp_port)],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                **self.subprocess_kwargs
+            )
+            
+            output = (result.stdout + result.stderr).strip()
+            logger.info(f"tcpip 输出: {output}")
+            
+            if result.returncode == 0 and 'restarting' in output.lower():
+                logger.info(f"设备 {device_id} TCP 调试已启用: port={tcp_port}")
+                return True
+            else:
+                logger.warning(f"设备 {device_id} tcpip 输出异常: {output}")
+                return result.returncode == 0
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"设备 {device_id} 启用 TCP 调试超时")
+            return False
+        except Exception as e:
+            logger.error(f"启用 TCP 调试失败: {str(e)}")
+            return False
+
+    def get_adb_tcp_ip(self, device_id: str) -> str:
+        """
+        获取设备通过 ADB TCP 调试可访问的 IP 地址
+        
+        通过 adb shell ip 命令获取设备的 WiFi IP
+        """
+        try:
+            # 尝试获取 wlan0 IP
+            result = subprocess.run(
+                [self.adb_path, '-s', device_id, 'shell', 
+                 'ip', '-f', 'inet', 'addr', 'show', 'wlan0'],
+                capture_output=True, text=True, timeout=5,
+                **self.subprocess_kwargs
+            )
+            import re
+            match = re.search(r'inet\s+(\d+\.\d+\.\d+\.\d+)', result.stdout)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        
+        try:
+            # fallback: 使用 getprop
+            result = subprocess.run(
+                [self.adb_path, '-s', device_id, 'shell', 'getprop', 'dhcp.wlan0.ipaddress'],
+                capture_output=True, text=True, timeout=5,
+                **self.subprocess_kwargs
+            )
+            ip = result.stdout.strip()
+            if ip and ip != '0.0.0.0':
+                return ip
+        except Exception:
+            pass
+        
+        return ''
