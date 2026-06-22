@@ -373,7 +373,7 @@ const loadSuites = async () => {
 const loadDevices = async () => {
   devicesLoading.value = true
   try {
-    const res = await getDeviceList({ page_size: 100 })
+    const res = await getDeviceList({ status: 'online,available,locked', page_size: 100 })
     const data = res.data
     if (data.success !== undefined) {
       availableDevices.value = data.data?.results || data.data || []
