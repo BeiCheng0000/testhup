@@ -419,7 +419,7 @@ const viewReport = (execution) => {
     ElMessage.info('报告路径不存在')
     return
   }
-  const reportUrl = `/api/app-automation/executions/${execution.id}/report/`
+  const reportUrl = `/app-automation-reports/execution_${execution.id}/index.html`
   window.open(reportUrl, '_blank')
 }
 

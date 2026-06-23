@@ -235,7 +235,7 @@ const viewReport = (execution) => {
     return
   }
   
-  const reportUrl = `/api/app-automation/executions/${execution.id}/report/`
+  const reportUrl = `/app-automation-reports/execution_${execution.id}/index.html`
   
   // 在新标签页打开报告
   window.open(reportUrl, '_blank')

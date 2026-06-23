@@ -73,47 +73,116 @@ class AirtestBase:
         retry_interval = cfg['RETRY_INTERVAL']
         timeout = cfg['DEVICE_CONNECT_TIMEOUT']
         
+        # 直接使用 JAVACAP 截图模式（ADBCAP）
+        # Minicap 在 Android 12+ 设备上经常因二进制不兼容失败，
+        # 且每次失败后 Airtest 内部仍需回退到 javacap，白费 ~3 秒。
+        # 跳过 Minicap 直接使用 javacap，功能一致但无安装开销。
+        return self._try_adbcap_fallback(platform='Android', timeout=timeout, cfg=cfg)
+    
+    def _safe_disconnect(self):
+        """安全断开设备连接，忽略所有错误"""
+        try:
+            if hasattr(G, 'DEVICE') and G.DEVICE:
+                try:
+                    G.DEVICE.disconnect()
+                except Exception:
+                    pass
+            # 清空设备列表
+            if hasattr(G, 'DEVICE_LIST'):
+                G.DEVICE_LIST.clear()
+        except Exception:
+            pass
+    
+    def _try_adbcap_fallback(self, platform: str, timeout: int, cfg: dict) -> bool:
+        """
+        通过 ADB 截图模式 (JAVACAP) 连接设备
+        
+        Args:
+            platform: 平台类型
+            timeout: 超时时间
+            cfg: 配置字典
+            
+        Returns:
+            是否连接成功
+        """
+        retry_count = cfg.get('RETRY_COUNT', 2)
+        retry_interval = cfg.get('RETRY_INTERVAL', 1)  # ADBCAP 模式重试间隔缩短为 1 秒
+        
         for attempt in range(retry_count):
             try:
+                logger.info(f"ADB截图模式连接设备 (尝试 {attempt+1}/{retry_count})...")
+                
+                # 确保没有残留连接
+                self._safe_disconnect()
+                
                 if self.device_id:
-                    logger.info(f"尝试连接到设备: {self.device_id} (尝试 {attempt+1}/{retry_count})")
                     success = self._init_device_with_timeout(
-                        platform='Android',
+                        platform=platform,
                         uuid=self.device_id,
-                        timeout=timeout
+                        timeout=timeout,
+                        cap_method='ADBCAP'
                     )
                 else:
-                    logger.info(f"尝试连接到默认设备 (尝试 {attempt+1}/{retry_count})")
                     success = self._init_device_with_timeout(
-                        platform='Android',
-                        timeout=timeout
+                        platform=platform,
+                        timeout=timeout,
+                        cap_method='ADBCAP'
                     )
                 
                 if not success:
-                    raise RuntimeError("设备连接失败")
+                    raise RuntimeError("ADB截图模式设备连接失败")
                 
-                # 设置全局超时时间
                 ST.FIND_TIMEOUT = cfg['FIND_TIMEOUT']
                 if hasattr(ST, 'CLICK_DELAY'):
                     ST.CLICK_DELAY = cfg['CLICK_DELAY']
                 
                 self.is_connected = True
-                logger.info("Airtest环境设置完成，设备已连接")
+                logger.info(f"ADB截图模式连接成功 (JAVACAP)，设备已就绪")
                 return True
                 
             except Exception as e:
-                logger.error(f"设置Airtest环境时出错: {str(e)}", exc_info=True)
+                logger.error(f"ADB截图模式连接失败: {str(e)}", exc_info=True)
+                
+                self._safe_disconnect()
                 
                 if attempt < retry_count - 1:
-                    logger.info(f"{retry_interval}秒后重试连接...")
+                    logger.info(f"{retry_interval}秒后重试ADB模式连接...")
                     time.sleep(retry_interval)
                 else:
-                    logger.error(f"经过 {retry_count} 次尝试后，无法连接设备")
+                    logger.error(f"ADB截图模式经过 {retry_count} 次尝试后也失败，无法连接设备")
                     return False
         
         return False
     
-    def _init_device_with_timeout(self, platform: str, uuid: Optional[str] = None, timeout: int = 30) -> bool:
+    def _verify_screen_health(self, method_desc: str) -> None:
+        """
+        验证设备屏幕代理是否可用
+        
+        Minicap 初始化失败时 Airtest 不会抛出异常，但屏幕代理不可用，
+        导致后续截图和图像识别操作失败。此方法检测屏幕是否真正可操作。
+        
+        Args:
+            method_desc: 截图方式描述（用于日志）
+            
+        Raises:
+            RuntimeError: 屏幕代理不可用
+        """
+        try:
+            display_info = G.DEVICE.display_info
+            if display_info and display_info.get('width') and display_info.get('height'):
+                logger.info(f"屏幕健康检查通过 ({method_desc}): "
+                           f"{display_info['width']}x{display_info['height']}, "
+                           f"旋转方向={display_info.get('rotation', 'N/A')}")
+                return
+            else:
+                raise RuntimeError("设备显示信息不完整")
+        except Exception as e:
+            msg = f"屏幕代理不可用 ({method_desc}): {e}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+    
+    def _init_device_with_timeout(self, platform: str, uuid: Optional[str] = None, timeout: int = 30,
+                                   cap_method: Optional[str] = None) -> bool:
         """
         使用超时机制初始化设备
         
@@ -121,6 +190,7 @@ class AirtestBase:
             platform: 平台类型，如 'Android'
             uuid: 设备UUID（可选）
             timeout: 超时时间（秒）
+            cap_method: 截图方式，None=使用Airtest默认(Minicap)，'ADBCAP'=ADB截图
             
         Returns:
             是否初始化成功
@@ -130,12 +200,21 @@ class AirtestBase:
         
         def call_init_device():
             try:
-                logger.info(f"线程中开始调用 init_device()...")
+                method_desc = cap_method if cap_method else '默认(Minicap)'
+                logger.info(f"线程中开始调用 init_device()，截图方式: {method_desc}...")
                 if uuid:
-                    init_device(platform=platform, uuid=uuid)
+                    kwargs = {'platform': platform, 'uuid': uuid}
                 else:
-                    init_device(platform=platform)
+                    kwargs = {'platform': platform}
+                if cap_method:
+                    kwargs['cap_method'] = cap_method
+                init_device(**kwargs)
                 logger.info(f"线程中 init_device() 调用完成")
+                
+                # 屏幕健康检查：验证显示信息是否可获取
+                # Minicap 失败时 Airtest 不抛异常，但屏幕代理不可用
+                self._verify_screen_health(method_desc)
+                
                 result_queue.put(True)
             except Exception as e:
                 logger.error(f"线程中 init_device() 调用异常: {type(e).__name__}: {e}", exc_info=True)

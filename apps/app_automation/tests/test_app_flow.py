@@ -92,7 +92,7 @@ class TestAppFlow:
         airtest_base.teardown_airtest()
     
     @allure.story("执行UI Flow")
-    def test_execute_ui_flow(self, test_case_id, package_name, execution_id, airtest, username):
+    def test_execute_ui_flow(self, test_case_id, package_name, execution_id, airtest, username, device_id):
         """执行 UI Flow 测试"""
         # 获取测试用例
         test_case = AppTestCase.objects.get(id=test_case_id)

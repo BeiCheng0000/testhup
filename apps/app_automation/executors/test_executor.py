@@ -155,8 +155,16 @@ class AppTestExecutor:
             # 解析测试结果
             test_results = self._parse_allure_results(allure_results_dir)
             
-            # 生成 Allure 报告
-            report_path = self._generate_allure_report(execution_id)
+            # Allure 报告异步生成（避免阻塞主流程 ~12s）
+            # 报告将在后台任务中生成并更新到 execution.report_path
+            report_path = None
+            try:
+                from ..tasks import generate_allure_report_async
+                generate_allure_report_async.delay(execution_id)
+                logger.info(f"Allure 报告异步生成已提交: execution_id={execution_id}")
+            except Exception as e:
+                logger.warning(f"提交异步 Allure 报告生成失败，回退到同步生成: {e}")
+                report_path = self._generate_allure_report(execution_id)
             
             return {
                 'success': exit_code == 0,

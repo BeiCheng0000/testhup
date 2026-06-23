@@ -22,12 +22,21 @@ components:
         type: string
       image_threshold:
         type: number
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     timeout: 5
     selector: ''
     image_scope: common
     selector_type: image
     image_threshold: 0.7
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 10
 - type: set_variable
@@ -76,6 +85,12 @@ components:
         type: string
       image_threshold:
         type: number
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     value: ''
     send_enter: false
@@ -83,6 +98,9 @@ components:
     image_scope: common
     selector_type: image
     image_threshold: 0.7
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 20
 - type: unset_variable
@@ -145,11 +163,20 @@ components:
         type: string
       selector_type:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     selector: ''
     direction: up
     image_scope: common
     selector_type: pos
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 30
 - type: api_request
@@ -217,12 +244,21 @@ components:
         type: string
       image_threshold:
         type: number
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     timeout: 3
     selector: ''
     image_scope: common
     selector_type: image
     image_threshold: 0.7
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 40
 - type: image_exists_click
@@ -240,6 +276,7 @@ components:
         - image
         - pos
         - region
+        - uiautomator
       selector:
         type: string
       image_scope:
@@ -252,6 +289,7 @@ components:
         - image
         - pos
         - region
+        - uiautomator
       fallback_selector:
         type: string
       fallback_image_scope:
@@ -260,6 +298,12 @@ components:
         type: number
       timeout:
         type: number
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     selector_type: image
     selector: ''
@@ -270,6 +314,9 @@ components:
     fallback_image_scope: common
     fallback_image_threshold: 0.7
     timeout: 5
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 70
 - type: screenshot
@@ -302,6 +349,7 @@ components:
         - image
         - pos
         - region
+        - uiautomator
       selector:
         type: string
       image_scope:
@@ -314,6 +362,7 @@ components:
         - image
         - pos
         - region
+        - uiautomator
       fallback_selector:
         type: string
       fallback_image_scope:
@@ -322,6 +371,12 @@ components:
         type: number
       timeout:
         type: number
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     selector_type: image
     selector: ''
@@ -332,6 +387,9 @@ components:
     fallback_image_scope: common
     fallback_image_threshold: 0.7
     timeout: 5
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 72
 - type: long_press
@@ -353,12 +411,21 @@ components:
         type: string
       selector_type:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     timeout: 5
     duration: 2
     selector: ''
     image_scope: common
     selector_type: image
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 80
 - type: double_click
@@ -378,11 +445,20 @@ components:
         type: string
       selector_type:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     timeout: 5
     selector: ''
     image_scope: common
     selector_type: image
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 90
 - type: drag
@@ -410,6 +486,12 @@ components:
         type: string
       start_selector_type:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     timeout: 5
     duration: 0.8
@@ -418,6 +500,9 @@ components:
     start_selector: ''
     end_selector_type: image
     start_selector_type: image
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 100
 - type: swipe_to
@@ -443,6 +528,12 @@ components:
         type: string
       target_selector_type:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     duration: 0.5
     interval: 0.5
@@ -451,6 +542,9 @@ components:
     image_scope: common
     target_selector: ''
     target_selector_type: image
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 110
 - type: assert
@@ -487,6 +581,12 @@ components:
         type: string
       ocr_selector:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     assert_type: text
     selector_type: region
@@ -496,6 +596,9 @@ components:
     image_scope: common
     expected_image_scope: common
     image_threshold: 0.7
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 50
 - type: foreach_assert
@@ -536,6 +639,12 @@ components:
         type: string
       expected_image_scope:
         type: string
+      locator_type:
+        type: string
+      locator_value:
+        type: string
+      fallback_locators:
+        type: array
   default_config:
     timeout: 5
     interval: 0.5
@@ -550,6 +659,9 @@ components:
     ocr_selector_type: region
     click_selector_type: image
     expected_image_scope: common
+    locator_type: resource_id
+    locator_value: ''
+    fallback_locators: []
   enabled: true
   sort_order: 125
 - type: if

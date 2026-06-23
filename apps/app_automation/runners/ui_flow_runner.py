@@ -606,6 +606,22 @@ class UiFlowRunner:
             logger.info(f"连接 uiautomator2 设备: {device_id}")
             self._u2_device = u2.connect(device_id)
             self._u2_device_id = device_id
+            
+            # 减少默认等待时间（默认 20s，UI层级定位只需 3-5s）
+            if hasattr(self._u2_device, 'wait_timeout'):
+                self._u2_device.wait_timeout = 3.0
+            
+            # ATX agent 健康检查（快速验证连接可用）
+            try:
+                self._u2_device.info
+            except Exception:
+                logger.warning("ATX agent 不可用，尝试重置...")
+                try:
+                    self._u2_device.reset_uiautomator()
+                    self._u2_device.wait_timeout = 3.0
+                except Exception as e:
+                    logger.error(f"ATX agent 重置失败: {e}")
+        
         return self._u2_device
     
     def _try_locate_u2(self, d, locator_type: str, value: str):
@@ -638,6 +654,9 @@ class UiFlowRunner:
         
         按优先级尝试：主定位策略 → 备选定位策略 → bounds 坐标降级
         
+        优化：预 dump 一次 UI 层级 XML，后续所有 .exists 调用使用内存缓存，
+        避免每个定位策略都重复 dump（节省 3-5s × N 次）。
+        
         Returns:
             找到的 u2 元素对象，或坐标元组 (x, y)（降级方案），或 None
         """
@@ -648,13 +667,19 @@ class UiFlowRunner:
         
         d = self._get_u2_device(device_id)
         
+        # 预加载 UI 层级（dump 一次，后续 .exists / .wait 使用缓存）
+        try:
+            d.dump_hierarchy()
+        except Exception as e:
+            logger.warning(f"预加载 UI 层级失败: {e}")
+        
         locator_type = locator_info.get('locator_type', 'resource_id')
         locator_value = locator_info.get('locator_value', '')
         
-        # 尝试主定位策略
+        # 尝试主定位策略（使用缓存的 hierarchy）
         element = self._try_locate_u2(d, locator_type, locator_value)
         
-        # 如果主策略失败，尝试备选定位
+        # 如果主策略失败，尝试备选定位（缓存仍然有效）
         if element is None:
             for fallback in locator_info.get('fallback_locators', []):
                 fb_type = fallback.get('type', '')

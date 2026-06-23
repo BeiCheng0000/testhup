@@ -473,7 +473,7 @@ async function viewSuiteAllureReport(suite) {
     const records = res.data.data || res.data.results || res.data || []
     const withReport = records.find(r => r.report_path)
     if (withReport) {
-      window.open(`/api/app-automation/executions/${withReport.id}/report/`, '_blank')
+      window.open(`/app-automation-reports/execution_${withReport.id}/index.html`, '_blank')
     } else {
       ElMessage.warning('该套件暂无 Allure 报告')
     }
@@ -567,7 +567,8 @@ function viewCaseDetail(row) {
 
 function viewAllureReport(row) {
   if (!row.report_path) return ElMessage.warning('该记录没有 Allure 报告')
-  window.open(`/api/app-automation/executions/${row.id}/report/`, '_blank')
+  // 使用专用报告路径，避免 API 路由干扰 Allure 报告内部相对路径资源加载
+  window.open(`/app-automation-reports/execution_${row.id}/index.html`, '_blank')
 }
 
 async function deleteCaseReport(row) {

@@ -621,7 +621,7 @@ const viewReport = (execution) => {
     ElMessage.info('报告路径不存在')
     return
   }
-  window.open(`/api/app-automation/executions/${execution.id}/report/`, '_blank')
+  window.open(`/app-automation-reports/execution_${execution.id}/index.html`, '_blank')
 }
 
 // ===== 工具方法 =====

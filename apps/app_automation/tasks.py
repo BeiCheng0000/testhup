@@ -254,9 +254,7 @@ def execute_app_test_task(execution_id, package_name: str = None, scheduled_task
         # 从数据库重新读取最新进度（子进程中的回调可能已经更新过）
         execution.refresh_from_db()
         
-        if report_result.get('report_path'):
-            execution.report_path = report_result['report_path']
-            logger.info(f"报告已生成: {report_result['report_path']}")
+        # report_path 由异步任务 generate_allure_report_async 更新，此处不设置
         
         test_results = report_result.get('test_results', {})
         execution.total_steps = test_results.get('total', 0)
@@ -356,6 +354,40 @@ def execute_app_test_task(execution_id, package_name: str = None, scheduled_task
 
 
 @shared_task
+def generate_allure_report_async(execution_id):
+    """
+    异步生成 Allure 报告（避免阻塞主测试执行流程）
+    
+    Args:
+        execution_id: AppTestExecution 的 ID
+    """
+    from .models import AppTestExecution
+    from .executors.test_executor import AppTestExecutor
+    
+    try:
+        execution = AppTestExecution.objects.get(id=execution_id)
+        executor = AppTestExecutor()
+        report_path = executor._generate_allure_report(execution_id=execution_id)
+        
+        if report_path:
+            execution.report_path = report_path
+            execution.save(update_fields=['report_path'])
+            send_execution_update(
+                execution_id,
+                report_path=report_path,
+                message='测试报告生成完成',
+            )
+            logger.info(f"异步 Allure 报告生成成功: {report_path}")
+        else:
+            logger.warning(f"异步 Allure 报告生成返回空路径: execution_id={execution_id}")
+            
+    except AppTestExecution.DoesNotExist:
+        logger.error(f"异步报告生成: 执行记录不存在: {execution_id}")
+    except Exception as e:
+        logger.error(f"异步 Allure 报告生成失败: {str(e)}", exc_info=True)
+
+
+@shared_task
 def execute_app_suite_task(suite_id, execution_ids, package_name=None, scheduled_task_id=None):
     """
     异步执行APP测试套件（顺序执行多个用例）
@@ -443,8 +475,7 @@ def execute_app_suite_task(suite_id, execution_ids, package_name=None, scheduled
 
                 execution.refresh_from_db()
 
-                if report_result.get('report_path'):
-                    execution.report_path = report_result['report_path']
+                # report_path 由异步任务 generate_allure_report_async 更新
 
                 test_results = report_result.get('test_results', {})
                 execution.total_steps = test_results.get('total', 0)

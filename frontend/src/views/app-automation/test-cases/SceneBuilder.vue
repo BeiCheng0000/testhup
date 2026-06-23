@@ -1170,6 +1170,10 @@ const shouldShowField = (field, step) => {
         if (assertType === "image") {
             return true
         }
+        // uiautomator 不需要 image_scope
+        if (typeFields.some(key => step.config[key] === "uiautomator")) {
+            return false
+        }
         return typeFields.some(key => step.config[key] === "image")
     }
 
@@ -1184,7 +1188,20 @@ const shouldShowField = (field, step) => {
         if (assertType === "image") {
             return true
         }
+        // uiautomator 不需要 image_threshold
+        if (typeFields.some(key => step.config[key] === "uiautomator")) {
+            return false
+        }
         return typeFields.some(key => step.config[key] === "image")
+    }
+
+    if (field === "locator_type" || field === "locator_value" || field === "fallback_locators") {
+        // uiautomator 定位相关字段：当任一 selector_type 为 uiautomator 时显示
+        const selectorTypeFields = [
+            "selector_type", "fallback_selector_type", "start_selector_type",
+            "end_selector_type", "target_selector_type", "click_selector_type", "ocr_selector_type"
+        ]
+        return selectorTypeFields.some(key => step.config[key] === "uiautomator")
     }
 
 
@@ -1895,7 +1912,7 @@ const getFieldGroups = (fieldsOverride = null) => {
         {
             key: 'selector',
             title: '定位',
-            fields: ['selector_type', 'selector', 'image_scope', 'image_threshold'],
+            fields: ['selector_type', 'selector', 'image_scope', 'image_threshold', 'locator_type', 'locator_value', 'fallback_locators'],
             hasFields: () => allFields.includes('selector_type')
         },
         {
@@ -1907,7 +1924,7 @@ const getFieldGroups = (fieldsOverride = null) => {
         {
             key: 'click',
             title: '点击定位',
-            fields: ['click_selector_type', 'click_selector', 'image_scope', 'image_threshold'],
+            fields: ['click_selector_type', 'click_selector', 'image_scope', 'image_threshold', 'locator_type', 'locator_value', 'fallback_locators'],
             hasFields: () => allFields.includes('click_selector_type')
         },
         {
@@ -1919,19 +1936,19 @@ const getFieldGroups = (fieldsOverride = null) => {
         {
             key: 'start',
             title: '起始定位',
-            fields: ['start_selector_type', 'start_selector', 'image_scope', 'image_threshold'],
+            fields: ['start_selector_type', 'start_selector', 'image_scope', 'image_threshold', 'locator_type', 'locator_value', 'fallback_locators'],
             hasFields: () => allFields.includes('start_selector_type')
         },
         {
             key: 'end',
             title: '结束定位',
-            fields: ['end_selector_type', 'end_selector', 'image_scope', 'image_threshold'],
+            fields: ['end_selector_type', 'end_selector', 'image_scope', 'image_threshold', 'locator_type', 'locator_value', 'fallback_locators'],
             hasFields: () => allFields.includes('end_selector_type')
         },
         {
             key: 'target',
             title: '目标定位',
-            fields: ['target_selector_type', 'target_selector', 'image_scope', 'image_threshold'],
+            fields: ['target_selector_type', 'target_selector', 'image_scope', 'image_threshold', 'locator_type', 'locator_value', 'fallback_locators'],
             hasFields: () => allFields.includes('target_selector_type')
         },
         {
@@ -2051,7 +2068,10 @@ const getFieldLabel = (field) => {
         min: "最小值",
         max: "最大值",
         retry_times: "重试次数",
-        retry_interval: "重试间隔(秒)"
+        retry_interval: "重试间隔(秒)",
+        locator_type: "UI定位方式",
+        locator_value: "UI定位值",
+        fallback_locators: "备选定位策略"
     }
     const config = getActiveConfigForField()
     const currentStep = activeStep.value || editingActiveStep.value
@@ -2079,39 +2099,40 @@ const getFieldPlaceholder = (field) => {
                 if (type === 'image') return 'image: 文件名'
                 if (type === 'pos') return 'pos: x,y'
                 if (type === 'region') return 'region: x1,y1,x2,y2'
+                if (type === 'uiautomator') return 'uiautomator: locator_value'
                 return null
             }
             
             if (field === 'selector') {
-                return getDynamicPlaceholder('selector', 'selector_type') || "image: 文件名 | pos: x,y | region: x1,y1,x2,y2"
+                return getDynamicPlaceholder('selector', 'selector_type') || "image: 文件名 | pos: x,y | region: x1,y1,x2,y2 | uiautomator: locator_value"
             }
             if (field === 'fallback_selector') {
-                return getDynamicPlaceholder('fallback_selector', 'fallback_selector_type') || "image: 文件名 | pos: x,y | region: x1,y1,x2,y2"
+                return getDynamicPlaceholder('fallback_selector', 'fallback_selector_type') || "image: 文件名 | pos: x,y | region: x1,y1,x2,y2 | uiautomator: locator_value"
             }
             if (field === 'click_selector') {
-                return getDynamicPlaceholder('click_selector', 'click_selector_type') || "image: 文件名 | pos: x,y"
+                return getDynamicPlaceholder('click_selector', 'click_selector_type') || "image: 文件名 | pos: x,y | uiautomator: locator_value"
             }
             if (field === 'start_selector') {
-                return getDynamicPlaceholder('start_selector', 'start_selector_type') || "image: 文件名 | pos: x,y"
+                return getDynamicPlaceholder('start_selector', 'start_selector_type') || "image: 文件名 | pos: x,y | uiautomator: locator_value"
             }
             if (field === 'end_selector') {
-                return getDynamicPlaceholder('end_selector', 'end_selector_type') || "image: 文件名 | pos: x,y"
+                return getDynamicPlaceholder('end_selector', 'end_selector_type') || "image: 文件名 | pos: x,y | uiautomator: locator_value"
             }
             if (field === 'target_selector') {
-                return getDynamicPlaceholder('target_selector', 'target_selector_type') || "image: 文件名"
+                return getDynamicPlaceholder('target_selector', 'target_selector_type') || "image: 文件名 | uiautomator: locator_value"
             }
             if (field === 'ocr_selector') {
-                return getDynamicPlaceholder('ocr_selector', 'ocr_selector_type') || "region: x1,y1,x2,y2 | pos: x,y"
+                return getDynamicPlaceholder('ocr_selector', 'ocr_selector_type') || "region: x1,y1,x2,y2 | pos: x,y | uiautomator: locator_value"
             }
             
             const placeholders = {
-                selector: "image: 文件名 | pos: x,y | region: x1,y1,x2,y2",
-                fallback_selector: "image: 文件名 | pos: x,y | region: x1,y1,x2,y2",
-                start_selector: "image: 文件名 | pos: x,y",
-                end_selector: "image: 文件名 | pos: x,y",
-                target_selector: "image: 文件名",
-                click_selector: "image: 文件名 | pos: x,y",
-                ocr_selector: "region: x1,y1,x2,y2 | pos: x,y",
+                selector: "image: 文件名 | pos: x,y | region: x1,y1,x2,y2 | uiautomator: locator_value",
+                fallback_selector: "image: 文件名 | pos: x,y | region: x1,y1,x2,y2 | uiautomator: locator_value",
+                start_selector: "image: 文件名 | pos: x,y | uiautomator: locator_value",
+                end_selector: "image: 文件名 | pos: x,y | uiautomator: locator_value",
+                target_selector: "image: 文件名 | uiautomator: locator_value",
+                click_selector: "image: 文件名 | pos: x,y | uiautomator: locator_value",
+                ocr_selector: "region: x1,y1,x2,y2 | pos: x,y | uiautomator: locator_value",
                 value: "请输入内容",
                 send_enter: "勾选后输入文本后自动发送回车键",
                 expected: "期望文本，如是数字匹配：格式为1,000,000",
@@ -2149,7 +2170,10 @@ const getFieldPlaceholder = (field) => {
                 branches: "JSON 数组，形如 [[...],[...]]",
                 try_steps: "JSON 数组，填入子步骤",
                 catch_steps: "JSON 数组，填入子步骤",
-                finally_steps: "JSON 数组，填入子步骤"
+                finally_steps: "JSON 数组，填入子步骤",
+                locator_type: "选择UI层级定位方式",
+                locator_value: "例如 com.example:id/login_btn",
+                fallback_locators: "JSON数组，如 [{\"type\":\"xpath\",\"value\":\"//Button[@text='登录']\"}]"
     }
     const currentStep = activeStep.value || editingActiveStep.value
     if (field === "value" && currentStep && currentStep.type === "set_variable") {
@@ -2211,12 +2235,14 @@ const getFieldOptions = (field) => {
                     { label: "image", value: "image" },
                     { label: "pos", value: "pos" },
                     { label: "region", value: "region" },
-                    { label: "text", value: "text" }
+                    { label: "text", value: "text" },
+                    { label: "uiautomator", value: "uiautomator" }
                 ],
                 fallback_selector_type: [
                     { label: "image", value: "image" },
                     { label: "pos", value: "pos" },
-                    { label: "region", value: "region" }
+                    { label: "region", value: "region" },
+                    { label: "uiautomator", value: "uiautomator" }
                 ],
                 assert_type: [
                     { label: "number", value: "number" },
@@ -2228,22 +2254,34 @@ const getFieldOptions = (field) => {
                 ],
                 start_selector_type: [
                     { label: "image", value: "image" },
-                    { label: "pos", value: "pos" }
+                    { label: "pos", value: "pos" },
+                    { label: "uiautomator", value: "uiautomator" }
                 ],
                 end_selector_type: [
                     { label: "image", value: "image" },
-                    { label: "pos", value: "pos" }
+                    { label: "pos", value: "pos" },
+                    { label: "uiautomator", value: "uiautomator" }
                 ],
                 target_selector_type: [
-                    { label: "image", value: "image" }
+                    { label: "image", value: "image" },
+                    { label: "uiautomator", value: "uiautomator" }
                 ],
                 click_selector_type: [
                     { label: "image", value: "image" },
-                    { label: "pos", value: "pos" }
+                    { label: "pos", value: "pos" },
+                    { label: "uiautomator", value: "uiautomator" }
                 ],
                 ocr_selector_type: [
                     { label: "region", value: "region" },
-                    { label: "pos", value: "pos" }
+                    { label: "pos", value: "pos" },
+                    { label: "uiautomator", value: "uiautomator" }
+                ],
+                locator_type: [
+                    { label: "resource_id", value: "resource_id" },
+                    { label: "text", value: "text" },
+                    { label: "class_name", value: "class_name" },
+                    { label: "xpath", value: "xpath" },
+                    { label: "content_desc", value: "content_desc" }
                 ],
                 direction: [
                     { label: "up", value: "up" },
@@ -2344,7 +2382,10 @@ const getFieldOrder = (fields) => {
                 "max_loops",
                 "interval",
                 "selector_type",
+                "locator_type",
                 "selector",
+                "locator_value",
+                "fallback_locators",
                 "value",
                 "send_enter",
                 "direction",

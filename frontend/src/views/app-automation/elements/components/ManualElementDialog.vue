@@ -21,6 +21,7 @@
           <el-radio value="image">图片元素</el-radio>
           <el-radio value="pos">坐标元素</el-radio>
           <el-radio value="region">区域元素</el-radio>
+          <el-radio value="uiautomator">UI层级</el-radio>
         </el-radio-group>
       </el-form-item>
       
@@ -261,6 +262,67 @@
           </el-space>
         </el-form-item>
       </template>
+      
+      <!-- UI层级定位类型配置 -->
+      <template v-if="formData.element_type === 'uiautomator'">
+        <el-divider content-position="left">UI层级定位配置</el-divider>
+        
+        <el-form-item label="定位方式" required>
+          <el-select v-model="formData.config.locator_type" style="width: 100%" placeholder="选择定位方式">
+            <el-option label="resource_id" value="resource_id" />
+            <el-option label="text" value="text" />
+            <el-option label="class_name" value="class_name" />
+            <el-option label="xpath" value="xpath" />
+            <el-option label="content_desc" value="content_desc" />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="定位值" required>
+          <el-input v-model="formData.config.locator_value" placeholder="如：com.example:id/login_btn" />
+        </el-form-item>
+        
+        <el-form-item label="元素类名">
+          <el-input v-model="formData.config.class_name" placeholder="如：android.widget.Button" />
+        </el-form-item>
+        
+        <el-form-item label="元素文本">
+          <el-input v-model="formData.config.text" placeholder="元素显示的文本" />
+        </el-form-item>
+        
+        <el-form-item label="content_desc">
+          <el-input v-model="formData.config.content_desc" placeholder="元素的 contentDescription" />
+        </el-form-item>
+        
+        <el-form-item label="元素边界(bounds)">
+          <el-input v-model="formData.config.bounds" placeholder="JSON格式: [x1, y1, x2, y2]" />
+          <div style="color: #909399; font-size: 12px; margin-top: 5px;">
+            💡 JSON数组格式，如 [100, 800, 980, 950]
+          </div>
+        </el-form-item>
+        
+        <el-form-item label="备选定位策略">
+          <div style="width: 100%;">
+            <div 
+              v-for="(fb, idx) in formData.config.fallback_locators" 
+              :key="idx" 
+              style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;"
+            >
+              <el-select v-model="fb.type" style="width: 140px" placeholder="类型">
+                <el-option label="resource_id" value="resource_id" />
+                <el-option label="text" value="text" />
+                <el-option label="class_name" value="class_name" />
+                <el-option label="xpath" value="xpath" />
+                <el-option label="content_desc" value="content_desc" />
+              </el-select>
+              <el-input v-model="fb.value" placeholder="定位值" style="flex: 1;" />
+              <el-button type="danger" :icon="Delete" circle size="small" @click="removeFallbackLocator(idx)" />
+            </div>
+            <el-button type="primary" size="small" @click="addFallbackLocator">
+              <el-icon><Plus /></el-icon> 添加备选定位
+            </el-button>
+          </div>
+        </el-form-item>
+      </template>
     </el-form>
     
     <template #footer>
@@ -368,7 +430,15 @@ const formData = reactive({
     x2: 0,
     y2: 0,
     image_path: '',
-    file_hash: ''
+    file_hash: '',
+    // uiautomator fields
+    locator_type: 'resource_id',
+    locator_value: '',
+    class_name: '',
+    text: '',
+    content_desc: '',
+    bounds: '',
+    fallback_locators: []
   }
 })
 
@@ -393,7 +463,14 @@ const handleTypeChange = () => {
     x2: 0,
     y2: 0,
     image_path: '',
-    file_hash: ''
+    file_hash: '',
+    locator_type: 'resource_id',
+    locator_value: '',
+    class_name: '',
+    text: '',
+    content_desc: '',
+    bounds: '',
+    fallback_locators: []
   }
   imageFile.value = null
   imagePreview.value = ''
@@ -527,6 +604,25 @@ const handleSubmit = async () => {
         x2: formData.config.x2,
         y2: formData.config.y2
       }
+    } else if (formData.element_type === 'uiautomator') {
+      // 解析bounds（可能为字符串）
+      let bounds = formData.config.bounds
+      if (typeof bounds === 'string' && bounds.trim()) {
+        try {
+          bounds = JSON.parse(bounds)
+        } catch (e) {
+          // 保持原样
+        }
+      }
+      submitData.config = {
+        locator_type: formData.config.locator_type || 'resource_id',
+        locator_value: formData.config.locator_value || '',
+        class_name: formData.config.class_name || '',
+        text: formData.config.text || '',
+        content_desc: formData.config.content_desc || '',
+        bounds: bounds || null,
+        fallback_locators: (formData.config.fallback_locators || []).filter(fb => fb.type && fb.value)
+      }
     }
     
     // 创建或更新元素
@@ -577,7 +673,14 @@ const handleClose = () => {
       x2: 0,
       y2: 0,
       image_path: '',
-      file_hash: ''
+      file_hash: '',
+      locator_type: 'resource_id',
+      locator_value: '',
+      class_name: '',
+      text: '',
+      content_desc: '',
+      bounds: '',
+      fallback_locators: []
     }
   })
   
@@ -607,6 +710,16 @@ watch(() => props.editData, (data) => {
     formData.tags = data.tags ? [...data.tags] : []
     
     if (data.config) {
+      // uiautomator bounds 可能是数组，序列化为字符串便于编辑
+      let bounds = data.config.bounds
+      if (Array.isArray(bounds)) {
+        bounds = JSON.stringify(bounds)
+      } else if (bounds) {
+        bounds = String(bounds)
+      } else {
+        bounds = ''
+      }
+      
       formData.config = {
         image_category: data.config.image_category || 'common',
         image_threshold: data.config.image_threshold || 0.7,
@@ -618,7 +731,16 @@ watch(() => props.editData, (data) => {
         x2: data.config.x2 || 0,
         y2: data.config.y2 || 0,
         image_path: data.config.image_path || '',
-        file_hash: data.config.file_hash || ''
+        file_hash: data.config.file_hash || '',
+        locator_type: data.config.locator_type || 'resource_id',
+        locator_value: data.config.locator_value || '',
+        class_name: data.config.class_name || '',
+        text: data.config.text || '',
+        content_desc: data.config.content_desc || '',
+        bounds: bounds,
+        fallback_locators: Array.isArray(data.config.fallback_locators) 
+          ? data.config.fallback_locators.map(fb => ({ ...fb })) 
+          : []
       }
     }
     
@@ -707,6 +829,15 @@ const handleDeleteCategory = async (categoryName) => {
       ElMessage.error('删除失败')
     }
   }
+}
+
+// uiautomator 备选定位策略操作
+const addFallbackLocator = () => {
+  formData.config.fallback_locators.push({ type: 'resource_id', value: '' })
+}
+
+const removeFallbackLocator = (idx) => {
+  formData.config.fallback_locators.splice(idx, 1)
 }
 
 onMounted(() => {
