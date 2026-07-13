@@ -345,7 +345,8 @@ export default {
     confirmDeleteSuite: 'Are you sure to delete test suite "{name}"?',
     confirmRemoveRequest: 'Are you sure to remove this request?',
     selectAtLeastOne: 'Please select at least one request',
-    assertionDeveloping: 'Assertion editing feature is under development'
+    assertionDeveloping: 'Assertion editing feature is under development',
+    assertionSaved: 'Assertions saved and synced to API request'
   },
 
   // Scheduled Tasks
@@ -424,6 +425,10 @@ export default {
   history: {
     title: 'Request History',
     searchRequest: 'Search request',
+    filterDateStart: 'Start Date',
+    filterDateEnd: 'End Date',
+    filterName: 'Request Name',
+    filterUrl: 'Request URL',
     batchDelete: 'Batch Delete',
     clearHistory: 'Clear History',
     httpRequest: 'HTTP Request',
@@ -469,6 +474,7 @@ export default {
     relatedProject: 'Related Project',
     selectRelatedProject: 'Select related project',
     environmentVariables: 'Environment Variables',
+    hostVariableRequired: 'Host variable is required and cannot be deleted',
     variableName: 'Variable Name',
     initialValue: 'Initial Value',
     currentValue: 'Current Value',
@@ -763,6 +769,7 @@ export default {
       createdAt: 'Created At',
       operation: 'Operation',
       activate: 'Activate',
+      deactivate: 'Deactivate',
       viewVariables: 'View Variables',
       edit: 'Edit',
       copy: 'Copy',
@@ -811,6 +818,7 @@ export default {
       binaryMessageSent: 'Binary message sent',
       suiteExecuted: 'Test suite execution completed',
       environmentActivated: 'Environment activated',
+      environmentDeactivated: 'Environment deactivated',
       environmentCreated: 'Environment created successfully',
       environmentUpdated: 'Environment updated successfully',
       projectCreated: 'Project created successfully',
@@ -830,6 +838,7 @@ export default {
       copyFailed: 'Failed to copy',
       executeFailed: 'Failed to execute',
       activateFailed: 'Failed to activate',
+      deactivateFailed: 'Failed to deactivate',
       pauseFailed: 'Failed to pause',
       sendFailed: 'Failed to send',
       connectFailed: 'Failed to connect',

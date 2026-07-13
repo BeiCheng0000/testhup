@@ -3,12 +3,28 @@
     <div class="header">
       <h3>{{ $t('apiTesting.history.title') }}</h3>
       <div class="filters">
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          :start-placeholder="$t('apiTesting.history.filterDateStart')"
+          :end-placeholder="$t('apiTesting.history.filterDateEnd')"
+          value-format="YYYY-MM-DD"
+          style="width: 260px"
+          @change="onFilterChange"
+        />
         <el-input
-          v-model="searchText"
-          :placeholder="$t('apiTesting.history.searchRequest')"
-          style="width: 200px"
+          v-model="filterName"
+          :placeholder="$t('apiTesting.history.filterName')"
+          style="width: 180px"
           clearable
-          @input="loadHistory"
+          @input="onFilterChange"
+        />
+        <el-input
+          v-model="filterUrl"
+          :placeholder="$t('apiTesting.history.filterUrl')"
+          style="width: 220px"
+          clearable
+          @input="onFilterChange"
         />
         <el-button
           type="danger"
@@ -179,7 +195,9 @@ const activeTab = ref('HTTP')
 const httpHistory = ref([])
 const websocketHistory = ref([])
 const loading = ref(false)
-const searchText = ref('')
+const dateRange = ref(null)
+const filterName = ref('')
+const filterUrl = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -187,6 +205,15 @@ const showDetailDialog = ref(false)
 const selectedHistory = ref(null)
 const detailTab = ref('request')
 const selectedIds = ref([])
+
+let filterTimer = null
+const onFilterChange = () => {
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    currentPage.value = 1
+    loadHistory()
+  }, 400)
+}
 
 const currentHistory = computed(() => {
   return activeTab.value === 'HTTP' ? httpHistory.value : websocketHistory.value
@@ -246,8 +273,20 @@ const loadHistory = async () => {
       request__request_type: activeTab.value
     }
 
-    if (searchText.value) {
-      params.search = searchText.value
+    // 日期范围筛选
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.date_from = dateRange.value[0]
+      params.date_to = dateRange.value[1]
+    }
+
+    // 请求名称筛选
+    if (filterName.value) {
+      params.name = filterName.value
+    }
+
+    // URL 筛选
+    if (filterUrl.value) {
+      params.url = filterUrl.value
     }
 
     const response = await api.get('/api-testing/histories/', { params })
@@ -410,6 +449,7 @@ onMounted(() => {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .pagination {

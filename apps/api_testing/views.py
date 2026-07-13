@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -40,7 +41,7 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-from .utils import execute_assertions
+from .utils import execute_assertions, resolve_url_with_host
 from .operation_logger import log_operation
 from .variable_resolver import VariableResolver
 from .serializers import (
@@ -331,25 +332,30 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             models.Q(owner=user) | models.Q(members=user)
         )
 
+        # 获取所有可访问项目中的成员/负责人（用于未关联集合的接口共享）
+        project_member_ids = User.objects.filter(
+            models.Q(owned_api_projects__in=accessible_projects) |
+            models.Q(api_projects__in=accessible_projects)
+        ).values_list('id', flat=True).distinct()
+
         # 查询两种接口：
         # 1. 关联到集合的接口（集合所属项目是用户有权限的）
-        # 2. 或者是用户创建的且没有关联集合的接口
+        # 2. 未关联集合但创建者是项目团队成员/负责人的接口（团队共享）
         queryset = ApiRequest.objects.filter(
             models.Q(
                 collection__project__in=accessible_projects
             ) | models.Q(
                 collection__isnull=True,
-                created_by=user
+                created_by__in=project_member_ids
             )
         ).distinct()
 
         project_id = self.request.query_params.get('project')
         if project_id:
-            # 如果指定了项目，则只查询该项目下的接口（包括未关联集合但创建者是当前用户的）
             queryset = queryset.filter(
                 models.Q(collection__project_id=project_id) | models.Q(
                     collection__isnull=True,
-                    created_by=user
+                    created_by__in=project_member_ids
                 )
             ).distinct()
 
@@ -415,9 +421,8 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             request_method = request.data.get('method', api_request.method)
             request_url = request.data.get('url', api_request.url)
 
-            # 替换URL中的变量（先解析动态函数，再替换环境变量）
-            url = self._replace_variables(request_url or '', variables)
-            url = resolver.resolve(url)
+            # 替换URL中的变量并自动拼接host域名
+            url = resolve_url_with_host(request_url or '', variables, resolver)
             
             # 准备请求头
             headers = {}
@@ -539,7 +544,18 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             
             return Response(history_data)
             
+        except requests.exceptions.Timeout:
+            return Response({'error': '请求超时（30秒）'}, status=status.HTTP_504_GATEWAY_TIMEOUT)
+        except requests.exceptions.ConnectionError as e:
+            return Response({'error': f'连接失败: {str(e)}'}, status=status.HTTP_502_BAD_GATEWAY)
+        except requests.exceptions.RequestException as e:
+            return Response({'error': f'HTTP请求错误: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        except Environment.DoesNotExist:
+            return Response({'error': '指定的环境不存在'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f'执行API请求失败 (request_id={pk}): {traceback.format_exc()}')
             # 保存错误历史
             history = RequestHistory.objects.create(
                 request=api_request,
@@ -555,7 +571,10 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                 executed_by=request.user
             )
             
-            return Response(RequestHistorySerializer(history).data, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': f'服务器内部错误: {str(e)}',
+                'history': RequestHistorySerializer(history).data
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _replace_variables(self, text, variables):
         """替换文本中的变量"""
@@ -616,23 +635,19 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
-        """激活环境"""
+        """激活环境（允许多个环境同时激活，不再互斥）"""
         environment = self.get_object()
-        
-        # 如果是局部环境，取消同项目下其他环境的激活状态
-        if environment.scope == 'LOCAL' and environment.project:
-            Environment.objects.filter(
-                project=environment.project,
-                scope='LOCAL'
-            ).update(is_active=False)
-        # 如果是全局环境，取消其他全局环境的激活状态
-        elif environment.scope == 'GLOBAL':
-            Environment.objects.filter(scope='GLOBAL').update(is_active=False)
-        
         environment.is_active = True
         environment.save()
-        
         return Response({'message': '环境已激活'})
+
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """取消激活环境"""
+        environment = self.get_object()
+        environment.is_active = False
+        environment.save()
+        return Response({'message': '环境已取消激活'})
 
     def perform_create(self, serializer):
         """创建环境时记录日志"""
@@ -657,7 +672,9 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        """删除环境时记录日志"""
+        """删除环境时记录日志（激活的环境禁止删除）"""
+        if instance.is_active:
+            raise ValidationError({'error': '已激活的环境无法删除，请先取消激活'})
         log_operation(
             operation_type='delete',
             resource_type='environment',
@@ -679,7 +696,7 @@ class RequestHistoryViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        return RequestHistory.objects.filter(
+        qs = RequestHistory.objects.filter(
             request__collection__project__in=ApiProject.objects.filter(
                 models.Q(owner=user) | models.Q(members=user)
             )
@@ -687,6 +704,38 @@ class RequestHistoryViewSet(viewsets.ModelViewSet):
             'request', 'environment', 'executed_by',
             'request__created_by', 'environment__created_by', 'environment__project'
         ).distinct()
+
+        # ---- 日期范围筛选 ----
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        if date_from:
+            qs = qs.filter(executed_at__gte=date_from)
+        if date_to:
+            qs = qs.filter(executed_at__lt=date_to + ' 23:59:59')
+
+        # ---- 请求名称筛选 ----
+        name = self.request.query_params.get('name')
+        if name:
+            qs = qs.filter(request__name__icontains=name)
+
+        # ---- URL 筛选 ----
+        url = self.request.query_params.get('url')
+        if url:
+            qs = qs.filter(
+                models.Q(request__url__icontains=url) |
+                models.Q(request_data__url__icontains=url)
+            )
+
+        # ---- 综合搜索（名称 + URL）----
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                models.Q(request__name__icontains=search) |
+                models.Q(request__url__icontains=search) |
+                models.Q(request_data__url__icontains=search)
+            )
+
+        return qs
 
     @action(detail=False, methods=['post'], url_path='batch-delete')
     def batch_delete(self, request):
@@ -761,9 +810,8 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                     if test_suite.environment:
                         variables.update(test_suite.environment.variables)
                     
-                    # 替换URL中的变量（先解析动态函数，再替换环境变量）
-                    url = self._replace_variables(api_request.url, variables)
-                    url = resolver.resolve(url)
+                    # 替换URL中的变量并自动拼接host域名
+                    url = resolve_url_with_host(api_request.url, variables, resolver)
 
                     # 准备请求头
                     headers = {}
@@ -783,17 +831,54 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                             headers[key] = self._replace_variables(str(value), variables)
                             headers[key] = resolver.resolve(headers[key])
 
-                    params = api_request.params.copy()
+                    # 准备请求参数
+                    params = api_request.params.copy() if api_request.params else {}
                     for key, value in params.items():
                         params[key] = self._replace_variables(str(value), variables)
                         params[key] = resolver.resolve(params[key])
 
+                    # 准备请求体（支持所有类型：json/form-data/x-www-form-urlencoded/raw/binary）
                     body_data = None
+                    files = None
+                    body_type = None
                     if api_request.body and api_request.method in ['POST', 'PUT', 'PATCH']:
-                        if api_request.body.get('type') == 'json':
+                        body_type = api_request.body.get('type', 'json')
+
+                        if body_type == 'json':
                             body_data = api_request.body.get('data', {})
                             body_data = self._replace_variables_in_dict(body_data, variables)
                             body_data = self._resolve_variables_in_dict(body_data, resolver)
+                        elif body_type == 'form-data':
+                            body_data = {}
+                            for item in api_request.body.get('data', []):
+                                if item.get('enabled', True):
+                                    key = item.get('key', '')
+                                    value = item.get('value', '')
+                                    value = self._replace_variables(str(value), variables)
+                                    value = resolver.resolve(value)
+                                    body_data[key] = value
+                        elif body_type == 'x-www-form-urlencoded':
+                            body_data = {}
+                            for item in api_request.body.get('data', []):
+                                if item.get('enabled', True):
+                                    key = item.get('key', '')
+                                    value = item.get('value', '')
+                                    value = self._replace_variables(str(value), variables)
+                                    value = resolver.resolve(value)
+                                    body_data[key] = value
+                        elif body_type == 'raw':
+                            body_data = self._replace_variables(api_request.body.get('data', ''), variables)
+                            body_data = resolver.resolve(body_data)
+                        elif body_type == 'binary':
+                            file_data = api_request.body.get('file_data')
+                            if file_data:
+                                files = []
+                                for file_item in file_data:
+                                    if file_item.get('enabled', True):
+                                        file_key = file_item.get('key', '')
+                                        file_path = file_item.get('path', '')
+                                        if file_path:
+                                            files.append((file_key, open(file_path, 'rb')))
 
                     # 执行请求
                     start_time = time.time()
@@ -802,9 +887,16 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                         url=url,
                         headers=headers,
                         params=params,
-                        json=body_data,
+                        json=body_data if body_type == 'json' else None,
+                        data=body_data if body_type != 'json' else None,
+                        files=files,
                         timeout=30
                     )
+
+                    # 关闭文件
+                    if files:
+                        for _, file_obj in files:
+                            file_obj.close()
                     end_time = time.time()
                     response_time = (end_time - start_time) * 1000
                     
@@ -826,7 +918,7 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                     for assertion in suite_request.assertions:
                         # 简单的状态码断言
                         if assertion.get('type') == 'status_code':
-                            expected = assertion.get('value')
+                            expected = assertion.get('expected') or assertion.get('expected_value') or assertion.get('value')
                             if response.status_code != expected:
                                 passed = False
                                 error_message = f'状态码断言失败: 期望 {expected}, 实际 {response.status_code}'
@@ -1035,6 +1127,26 @@ class TestSuiteRequestViewSet(viewsets.ModelViewSet):
                 models.Q(owner=user) | models.Q(members=user)
             )
         ).distinct()
+
+    @action(detail=True, methods=['post'], url_path='sync-assertions')
+    def sync_assertions(self, request, pk=None):
+        """同步断言：同时更新 TestSuiteRequest.assertions 和 ApiRequest.assertions"""
+        suite_request = self.get_object()
+        assertions = request.data.get('assertions', [])
+
+        # 更新套件请求的断言
+        suite_request.assertions = assertions
+        suite_request.save()
+
+        # 同步更新接口自身的断言
+        api_request = suite_request.request
+        api_request.assertions = assertions
+        api_request.save()
+
+        return Response({
+            'message': '断言已同步',
+            'assertions': assertions
+        })
 
 
 class TestExecutionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1627,15 +1739,23 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """根据用户权限过滤任务"""
-        queryset = super().get_queryset()
+        """根据用户权限过滤任务（项目团队成员可共享查看）"""
+        user = self.request.user
         
         # 管理员可以看到所有任务
-        if self.request.user.is_staff:
-            return queryset
+        if user.is_staff:
+            return super().get_queryset()
         
-        # 普通用户只能看到自己创建的任务
-        return queryset.filter(created_by=self.request.user)
+        # 获取用户有权限的项目
+        accessible_projects = ApiProject.objects.filter(
+            models.Q(owner=user) | models.Q(members=user)
+        )
+        
+        # 团队共享：通过 test_suite.project 或 api_request.collection.project 关联
+        return ScheduledTask.objects.filter(
+            models.Q(test_suite__project__in=accessible_projects) |
+            models.Q(api_request__collection__project__in=accessible_projects)
+        ).select_related('environment').distinct()
     
     @action(detail=True, methods=['post'])
     def run_now(self, request, pk=None):
@@ -1647,13 +1767,22 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         logger.info(f"获取任务对象: {task.id} - {task.name}")
         
-        # 检查权限
-        if not request.user.is_staff and task.created_by != request.user:
-            logger.info("权限检查失败")
-            return Response(
-                {'error': '无权执行此任务'}, 
-                status=status.HTTP_403_FORBIDDEN
+        # 检查权限（get_object 已通过 get_queryset 校验项目成员权限）
+        if not request.user.is_staff:
+            # 非管理员需要确认是项目团队成员
+            accessible_projects = ApiProject.objects.filter(
+                models.Q(owner=request.user) | models.Q(members=request.user)
             )
+            has_access = (
+                (task.test_suite and task.test_suite.project in accessible_projects) or
+                (task.api_request and task.api_request.collection and 
+                 task.api_request.collection.project in accessible_projects)
+            )
+            if not has_access:
+                return Response(
+                    {'error': '无权执行此任务'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
         
         try:
             # 创建执行日志
@@ -1896,9 +2025,12 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
         """执行测试套件"""
         from .utils import execute_test_suite
         
+        # 如果定时任务未指定环境，回退到测试套件自身的环境
+        environment = task.environment or task.test_suite.environment
+        
         result = execute_test_suite(
             task.test_suite, 
-            task.environment, 
+            environment, 
             task.created_by
         )
         return result
@@ -1907,9 +2039,18 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
         """执行API请求"""
         from .utils import execute_api_request
         
+        # 如果定时任务未指定环境，回退到接口所在项目的激活环境
+        from .models import Environment
+        environment = task.environment
+        if not environment:
+            environment = Environment.objects.filter(
+                project=task.api_request.project, 
+                is_active=True
+            ).first()
+        
         result = execute_api_request(
             task.api_request, 
-            task.environment, 
+            environment, 
             task.created_by
         )
         return result
@@ -2451,10 +2592,15 @@ class TaskExecutionLogViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
+        """团队共享执行日志"""
         user = self.request.user
+        accessible_projects = ApiProject.objects.filter(
+            models.Q(owner=user) | models.Q(members=user)
+        )
         return TaskExecutionLog.objects.filter(
-            task__created_by=user
-        ).select_related('task', 'executed_by')
+            models.Q(task__test_suite__project__in=accessible_projects) |
+            models.Q(task__api_request__collection__project__in=accessible_projects)
+        ).select_related('task', 'executed_by').distinct()
 
 
 
@@ -2548,10 +2694,22 @@ class OperationLogViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """只返回当前用户相关的操作日志"""
+        """只返回当前用户所在项目的操作日志"""
         user = self.request.user
-        # 可以根据需要调整权限逻辑，这里返回所有日志
-        return OperationLog.objects.all().order_by('-created_at')
+        if user.is_staff:
+            return OperationLog.objects.all().order_by('-created_at')
+        # 通过 user 的 api_projects 和 owned_api_projects 关系获取同项目用户
+        project_member_ids = User.objects.filter(
+            models.Q(owned_api_projects__in=ApiProject.objects.filter(
+                models.Q(owner=user) | models.Q(members=user)
+            )) |
+            models.Q(api_projects__in=ApiProject.objects.filter(
+                models.Q(owner=user) | models.Q(members=user)
+            ))
+        ).values_list('id', flat=True).distinct()
+        return OperationLog.objects.filter(
+            user__in=project_member_ids
+        ).order_by('-created_at')
 
 
 class ApiDashboardViewSet(viewsets.ViewSet):

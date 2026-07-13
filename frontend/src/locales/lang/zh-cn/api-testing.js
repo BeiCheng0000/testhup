@@ -356,7 +356,8 @@ export default {
     confirmDeleteSuite: '确定要删除测试套件 "{name}" 吗？',
     confirmRemoveRequest: '确定要移除这个请求吗？',
     selectAtLeastOne: '请选择至少一个请求',
-    assertionDeveloping: '断言编辑功能开发中'
+    assertionDeveloping: '断言编辑功能开发中',
+    assertionSaved: '断言已保存并同步到接口'
   },
 
   // 定时任务
@@ -435,6 +436,10 @@ export default {
   history: {
     title: '请求历史',
     searchRequest: '搜索请求',
+    filterDateStart: '开始日期',
+    filterDateEnd: '结束日期',
+    filterName: '请求名称',
+    filterUrl: '请求URL',
     batchDelete: '批量删除',
     clearHistory: '清空历史',
     httpRequest: 'HTTP请求',
@@ -480,6 +485,7 @@ export default {
     relatedProject: '关联项目',
     selectRelatedProject: '请选择关联项目',
     environmentVariables: '环境变量',
+    hostVariableRequired: 'host变量为必填项，不能删除',
     variableName: '变量名',
     initialValue: '初始值',
     currentValue: '当前值',
@@ -774,6 +780,7 @@ export default {
       createdAt: '创建时间',
       operation: '操作',
       activate: '激活',
+      deactivate: '取消激活',
       viewVariables: '查看变量',
       edit: '编辑',
       copy: '复制',
@@ -822,6 +829,7 @@ export default {
       binaryMessageSent: '二进制消息已发送',
       suiteExecuted: '测试套件执行完成',
       environmentActivated: '环境已激活',
+      environmentDeactivated: '环境已取消激活',
       environmentCreated: '环境创建成功',
       environmentUpdated: '环境更新成功',
       projectCreated: '项目创建成功',
@@ -841,6 +849,7 @@ export default {
       copyFailed: '复制失败',
       executeFailed: '执行失败',
       activateFailed: '激活失败',
+      deactivateFailed: '取消激活失败',
       pauseFailed: '暂停失败',
       sendFailed: '发送失败',
       connectFailed: '连接失败',

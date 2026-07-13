@@ -359,6 +359,151 @@
         <el-button @click="showExecutionDialog = false">{{ $t('apiTesting.common.close') }}</el-button>
       </template>
     </el-dialog>
+
+    <!-- 编辑断言对话框 -->
+    <el-dialog
+      v-model="showAssertionDialog"
+      :title="$t('apiTesting.automation.editAssertions') + ' - ' + (editingSuiteRequest?.request?.name || '')"
+      width="700px"
+      :close-on-click-modal="false"
+      @close="showAssertionDialog = false"
+    >
+      <div class="assertions-editor">
+        <div class="assertions-header">
+          <el-button size="small" type="primary" @click="addAssertion">
+            <el-icon><Plus /></el-icon>
+            {{ $t('apiTesting.interface.addAssertion') }}
+          </el-button>
+        </div>
+
+        <div class="assertions-list">
+          <div
+            v-for="(assertion, index) in editingAssertions"
+            :key="index"
+            class="assertion-item"
+          >
+            <div class="assertion-header">
+              <el-input
+                v-model="assertion.name"
+                :placeholder="$t('apiTesting.interface.assertionName')"
+                size="small"
+                class="assertion-name"
+              />
+              <el-button
+                size="small"
+                type="danger"
+                @click="removeAssertion(index)"
+                circle
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+
+            <div class="assertion-config">
+              <el-select
+                v-model="assertion.type"
+                :placeholder="$t('apiTesting.interface.selectAssertionType')"
+                size="small"
+                @change="onAssertionTypeChange(assertion)"
+              >
+                <el-option :label="$t('apiTesting.interface.assertionTypes.statusCode')" value="status_code" />
+                <el-option :label="$t('apiTesting.interface.assertionTypes.responseTime')" value="response_time" />
+                <el-option :label="$t('apiTesting.interface.assertionTypes.contains')" value="contains" />
+                <el-option :label="$t('apiTesting.interface.assertionTypes.jsonPath')" value="json_path" />
+                <el-option :label="$t('apiTesting.interface.assertionTypes.header')" value="header" />
+                <el-option :label="$t('apiTesting.interface.assertionTypes.equals')" value="equals" />
+              </el-select>
+
+              <div class="assertion-params" v-if="assertion.type">
+                <!-- 状态码断言 -->
+                <div v-if="assertion.type === 'status_code'">
+                  <el-input-number
+                    v-model="assertion.expected"
+                    :min="100"
+                    :max="599"
+                    size="small"
+                    :placeholder="$t('apiTesting.interface.expectedStatusCode')"
+                  />
+                </div>
+
+                <!-- 响应时间断言 -->
+                <div v-else-if="assertion.type === 'response_time'">
+                  <el-input-number
+                    v-model="assertion.expected"
+                    :min="1"
+                    size="small"
+                    :placeholder="$t('apiTesting.interface.maxResponseTime')"
+                  />
+                </div>
+
+                <!-- 包含文本断言 -->
+                <div v-else-if="assertion.type === 'contains'">
+                  <el-input
+                    v-model="assertion.expected"
+                    :placeholder="$t('apiTesting.interface.expectedContains')"
+                    size="small"
+                  />
+                </div>
+
+                <!-- JSON路径断言 -->
+                <div v-else-if="assertion.type === 'json_path'">
+                  <el-input
+                    v-model="assertion.json_path"
+                    :placeholder="$t('apiTesting.interface.jsonPathExample')"
+                    size="small"
+                    class="assertion-input"
+                  />
+                  <el-input
+                    v-model="assertion.expected"
+                    :placeholder="$t('apiTesting.interface.expectedValue')"
+                    size="small"
+                  />
+                </div>
+
+                <!-- 响应头断言 -->
+                <div v-else-if="assertion.type === 'header'">
+                  <el-input
+                    v-model="assertion.header_name"
+                    :placeholder="$t('apiTesting.interface.headerNameLabel')"
+                    size="small"
+                    class="assertion-input"
+                  />
+                  <el-input
+                    v-model="assertion.expected_value"
+                    :placeholder="$t('apiTesting.interface.expectedValue')"
+                    size="small"
+                  />
+                </div>
+
+                <!-- 完全匹配断言 -->
+                <div v-else-if="assertion.type === 'equals'">
+                  <el-input
+                    v-model="assertion.expected"
+                    :placeholder="$t('apiTesting.interface.expectedMatch')"
+                    size="small"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="!editingAssertions || editingAssertions.length === 0" class="no-assertions">
+            <p>{{ $t('apiTesting.interface.noAssertions') }}</p>
+            <el-button size="small" type="primary" @click="addAssertion">
+              <el-icon><Plus /></el-icon>
+              {{ $t('apiTesting.interface.addFirstAssertion') }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="showAssertionDialog = false">{{ $t('apiTesting.common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveAssertions" :loading="savingAssertions">
+          {{ $t('apiTesting.common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -368,7 +513,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import {
   Plus, Refresh, MoreFilled, VideoPlay, Edit,
-  Folder, Document
+  Folder, Document, Delete
 } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 import dayjs from 'dayjs'
@@ -387,10 +532,14 @@ const executionsLoading = ref(false)
 const showCreateSuiteDialog = ref(false)
 const showAddRequestDialog = ref(false)
 const showExecutionDialog = ref(false)
+const showAssertionDialog = ref(false)
 const editingSuite = ref(null)
 const submittingSuite = ref(false)
 const addingRequests = ref(false)
+const savingAssertions = ref(false)
 const currentExecution = ref(null)
+const editingSuiteRequest = ref(null)
+const editingAssertions = ref([])
 const suiteFormRef = ref()
 const requestTreeRef = ref()
 
@@ -833,7 +982,58 @@ const updateRequestEnabled = async (suiteRequest) => {
 }
 
 const editAssertions = (suiteRequest) => {
-  ElMessage.info(t('apiTesting.messages.info.featureInDevelopment'))
+  editingSuiteRequest.value = suiteRequest
+  // 深拷贝断言数组，如果为空则提供默认断言
+  const assertions = suiteRequest.request?.assertions?.length 
+    ? suiteRequest.request.assertions 
+    : [{ name: '状态码断言', type: 'status_code', expected: 200 }]
+  editingAssertions.value = JSON.parse(JSON.stringify(assertions))
+  showAssertionDialog.value = true
+}
+
+const addAssertion = () => {
+  const count = editingAssertions.value.length + 1
+  editingAssertions.value.push({
+    name: `${t('apiTesting.interface.assertion')}${count}`,
+    type: 'status_code',
+    expected: 200
+  })
+}
+
+const removeAssertion = (index) => {
+  editingAssertions.value.splice(index, 1)
+}
+
+const onAssertionTypeChange = (assertion) => {
+  // 切换类型时重置特有字段，保留通用字段
+  assertion.expected = assertion.type === 'status_code' ? 200 : null
+  assertion.expected_value = null
+  assertion.json_path = null
+  assertion.header_name = null
+}
+
+const saveAssertions = async () => {
+  if (!editingSuiteRequest.value) return
+
+  savingAssertions.value = true
+  try {
+    await api.post(
+      `/api-testing/test-suite-requests/${editingSuiteRequest.value.id}/sync-assertions/`,
+      { assertions: editingAssertions.value }
+    )
+    ElMessage.success(t('apiTesting.automation.assertionSaved'))
+
+    // 更新本地数据
+    editingSuiteRequest.value.request.assertions = JSON.parse(JSON.stringify(editingAssertions.value))
+    showAssertionDialog.value = false
+
+    // 刷新套件详情以确保数据一致
+    await reloadCurrentSuite()
+  } catch (error) {
+    ElMessage.error(t('apiTesting.messages.error.updateFailed'))
+  } finally {
+    savingAssertions.value = false
+  }
 }
 
 const removeRequest = async (suiteRequest) => {
@@ -1102,5 +1302,60 @@ onMounted(() => {
 .execution-results h4 {
   margin: 0 0 15px 0;
   color: #303133;
+}
+
+/* 断言编辑器样式 */
+.assertions-editor {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.assertions-header {
+  margin-bottom: 15px;
+}
+
+.assertion-item {
+  background: #f8f9fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.assertion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.assertion-name {
+  flex: 1;
+}
+
+.assertion-config {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assertion-params {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assertion-input {
+  margin-bottom: 8px;
+}
+
+.no-assertions {
+  text-align: center;
+  padding: 30px 0;
+  color: #909399;
+}
+
+.no-assertions p {
+  margin-bottom: 15px;
 }
 </style>

@@ -43,6 +43,11 @@
     <div class="task-list">
       <el-table :data="tasks" v-loading="loading">
         <el-table-column prop="name" :label="$t('apiTesting.scheduledTask.taskName')" min-width="200" />
+        <el-table-column prop="environment_name" :label="$t('apiTesting.scheduledTask.executeEnvironment')" min-width="140">
+          <template #default="scope">
+            <span>{{ scope.row.environment_name || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="task_type" :label="$t('apiTesting.scheduledTask.taskType')" width="120">
           <template #default="scope">
             <el-tag :type="scope.row.task_type === 'TEST_SUITE' ? 'success' : 'primary'">

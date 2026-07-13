@@ -119,6 +119,10 @@ class ApiRequestSerializer(serializers.ModelSerializer):
             else:
                 validated_data['request_type'] = 'HTTP'
 
+        # 如果未传入断言或断言为空，默认添加状态码200断言
+        if not validated_data.get('assertions'):
+            validated_data['assertions'] = [{"name": "状态码断言", "type": "status_code", "expected": 200}]
+
         return super().create(validated_data)
 
 
@@ -144,6 +148,14 @@ class EnvironmentSerializer(serializers.ModelSerializer):
             attrs['project'] = None
         elif attrs.get('scope') == 'LOCAL' and not attrs.get('project'):
             raise serializers.ValidationError({'project': '局部环境变量必须关联项目'})
+        
+        # 确保 variables 中始终包含 host 变量（新建和编辑时均强制）
+        variables = attrs.get('variables', {})
+        if not isinstance(variables, dict):
+            variables = {}
+        if 'host' not in variables:
+            variables['host'] = {'initialValue': '', 'currentValue': ''}
+        attrs['variables'] = variables
         return attrs
 
     def to_representation(self, instance):

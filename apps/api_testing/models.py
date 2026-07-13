@@ -94,7 +94,7 @@ class ApiRequest(models.Model):
     auth = models.JSONField(default=dict, verbose_name='认证信息')
     pre_request_script = models.TextField(blank=True, verbose_name='请求前脚本')
     post_request_script = models.TextField(blank=True, verbose_name='请求后脚本')
-    assertions = models.JSONField(default=list, verbose_name='断言规则')
+    assertions = models.JSONField(default=lambda: [{"name": "状态码断言", "type": "status_code", "expected": 200}], verbose_name='断言规则')
     order = models.IntegerField(default=0, verbose_name='排序')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建者')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
@@ -189,7 +189,7 @@ class TestSuiteRequest(models.Model):
     test_suite = models.ForeignKey(TestSuite, on_delete=models.CASCADE, verbose_name='测试套件')
     request = models.ForeignKey(ApiRequest, on_delete=models.CASCADE, verbose_name='API请求')
     order = models.IntegerField(default=0, verbose_name='执行顺序')
-    assertions = models.JSONField(default=list, verbose_name='断言规则')
+    assertions = models.JSONField(default=lambda: [{"name": "状态码断言", "type": "status_code", "expected": 200}], verbose_name='断言规则')
     enabled = models.BooleanField(default=True, verbose_name='是否启用')
 
     class Meta:

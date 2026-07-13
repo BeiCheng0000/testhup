@@ -17,6 +17,7 @@
           @edit="editEnvironment"
           @delete="deleteEnvironment"
           @activate="activateEnvironment"
+          @deactivate="deactivateEnvironment"
           @duplicate="duplicateEnvironment"
         />
       </el-tab-pane>
@@ -43,6 +44,7 @@
           @edit="editEnvironment"
           @delete="deleteEnvironment"
           @activate="activateEnvironment"
+          @deactivate="deactivateEnvironment"
           @duplicate="duplicateEnvironment"
         />
       </el-tab-pane>
@@ -208,7 +210,7 @@ const form = reactive({
   project: null,
   variables: [
     {
-      key: '',
+      key: 'host',
       initialValue: '',
       currentValue: ''
     }
@@ -315,6 +317,11 @@ const addVariable = () => {
 }
 
 const removeVariable = (index) => {
+  // 不允许删除 host 变量
+  if (form.variables[index]?.key === 'host') {
+    ElMessage.warning(t('apiTesting.environment.hostVariableRequired'))
+    return
+  }
   if (form.variables.length > 1) {
     form.variables.splice(index, 1)
   }
@@ -398,6 +405,21 @@ const activateEnvironment = async (environment) => {
   }
 }
 
+const deactivateEnvironment = async (environment) => {
+  try {
+    await api.post(`/api-testing/environments/${environment.id}/deactivate/`)
+    ElMessage.success(t('apiTesting.messages.success.environmentDeactivated'))
+
+    if (activeTab.value === 'GLOBAL') {
+      await loadGlobalEnvironments()
+    } else {
+      await loadLocalEnvironments()
+    }
+  } catch (error) {
+    ElMessage.error(t('apiTesting.messages.error.deactivateFailed'))
+  }
+}
+
 const duplicateEnvironment = async (environment) => {
   const newEnv = {
     name: `${environment.name} - Copy`,
@@ -478,7 +500,7 @@ const resetForm = () => {
     project: null,
     variables: [
       {
-        key: '',
+        key: 'host',
         initialValue: '',
         currentValue: ''
       }

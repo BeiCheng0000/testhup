@@ -1,9 +1,14 @@
 
+
 import json
+import logging
+import re
 import time
 from django.utils import timezone
 from .models import RequestHistory
 from .variable_resolver import VariableResolver
+
+logger = logging.getLogger(__name__)
 
 
 def execute_assertions(response, assertions):
@@ -111,6 +116,10 @@ def execute_test_suite(test_suite, environment, executed_by):
         # 创建变量解析器
         resolver = VariableResolver()
 
+        # 如果未传入环境，回退到测试套件自身的环境
+        if not environment:
+            environment = test_suite.environment
+
         # 创建执行记录
         execution = TestExecution.objects.create(
             test_suite=test_suite,
@@ -139,9 +148,8 @@ def execute_test_suite(test_suite, environment, executed_by):
                 if environment:
                     variables.update(environment.variables)
 
-                # 替换URL中的变量（先解析动态函数，再替换环境变量）
-                url = _replace_variables(api_request.url, variables)
-                url = resolver.resolve(url)
+                # 替换URL中的变量并自动拼接host域名
+                url = resolve_url_with_host(api_request.url, variables, resolver)
 
                 # 准备请求头
                 headers = {}
@@ -370,9 +378,8 @@ def execute_api_request(api_request, environment, executed_by):
         if environment:
             variables.update(environment.variables)
 
-        # 替换URL中的变量（先解析动态函数，再替换环境变量）
-        url = _replace_variables(api_request.url, variables)
-        url = resolver.resolve(url)
+        # 替换URL中的变量并自动拼接host域名
+        url = resolve_url_with_host(api_request.url, variables, resolver)
 
         # 准备请求头
         headers = {}
@@ -598,6 +605,45 @@ def _replace_variables(text, variables):
             replacement = str(value) if value is not None else ''
         result = result.replace(f'{{{{{key}}}}}', replacement)
     return result
+
+
+def _get_env_variable_value(variables, key):
+    """从环境变量字典中获取指定key的变量值"""
+    value = (variables or {}).get(key)
+    if isinstance(value, dict):
+        return value.get('currentValue') or value.get('initialValue') or ''
+    return value or ''
+
+
+def resolve_url_with_host(url, variables, resolver=None):
+    """解析URL：先替换变量占位符和动态函数，再自动拼接host域名
+    
+    当URL不以http://或https://开头时，自动从环境变量中获取host值并拼接到前面。
+    支持单次执行、测试套件执行、定时任务等所有场景。
+    """
+    # 第一步：替换 {{变量}} 占位符
+    url = _replace_variables(url, variables)
+    # 第二步：解析 ${动态函数}
+    if resolver:
+        url = resolver.resolve(url)
+    
+    # 第三步：如果URL没有协议前缀，自动拼接host域名
+    if url and isinstance(url, str) and not url.startswith(('http://', 'https://')):
+        host = _get_env_variable_value(variables, 'host')
+        if host:
+            host = host.rstrip('/')
+            url = host + '/' + url.lstrip('/')
+        else:
+            logger.warning(
+                f"URL缺少协议前缀且环境变量中未配置host，请求可能失败: {url}"
+            )
+    
+    # 第四步：规范化URL，修复变量替换可能产生的双斜杠
+    if url and isinstance(url, str):
+        # 找到://后面的部分，把其中连续的//替换为/
+        url = re.sub(r'(?<!:)/{2,}', '/', url)
+    
+    return url
 
 def _replace_variables_in_dict(data, variables):
     """递归替换字典中的变量"""

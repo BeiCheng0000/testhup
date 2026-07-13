@@ -1056,6 +1056,11 @@ const selectSearchResult = (item) => {
 const onProjectChange = async (projectId) => {
   if (!projectId) return
 
+  // 切换项目时清空环境选择，让 loadEnvironments 自动选择新项目的第一个环境
+  selectedEnvironment.value = null
+  selectedRequest.value = null
+  response.value = null
+
   try {
     await loadCollections(projectId)
     await loadEnvironments(projectId)
@@ -1112,6 +1117,10 @@ const loadEnvironments = async (projectId) => {
     })
     // 后端可能返回分页格式 { results: [...] } 或直接返回数组
     environments.value = response.data.results || response.data || []
+    // 如果项目有配置环境，默认选择第一个
+    if (environments.value.length > 0 && !selectedEnvironment.value) {
+      selectedEnvironment.value = environments.value[0].id
+    }
   } catch (error) {
     ElMessage.error('加载环境失败')
     console.error('加载环境失败:', error)
@@ -1328,7 +1337,7 @@ const createEmptyRequest = () => {
     headers: {},
     pre_request_script: '',
     post_request_script: '',
-    assertions: [],
+    assertions: [{ name: '状态码断言', type: 'status_code', expected: 200 }],
     request_type: 'HTTP'
   }
 
@@ -1383,7 +1392,7 @@ const addRequest = () => {
     headers: {},
     pre_request_script: '',
     post_request_script: '',
-    assertions: [],
+    assertions: [{ name: '状态码断言', type: 'status_code', expected: 200 }],
     request_type: 'HTTP'
   }
 
@@ -1544,6 +1553,7 @@ const requestMethod = computed({
         request_type: 'HTTP',
         headers: [],
         params: [],
+        assertions: [{ name: '状态码断言', type: 'status_code', expected: 200 }],
         body: {
           type: 'none',
           content: ''

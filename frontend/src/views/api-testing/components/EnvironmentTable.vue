@@ -39,6 +39,15 @@
             >
               {{ $t('apiTesting.component.environmentTable.activate') }}
             </el-button>
+            <el-button
+              v-else
+              link
+              type="warning"
+              @click="$emit('deactivate', scope.row)"
+              size="small"
+            >
+              {{ $t('apiTesting.component.environmentTable.deactivate') }}
+            </el-button>
             <el-button link type="primary" @click="viewVariables(scope.row)" size="small">
               {{ $t('apiTesting.component.environmentTable.viewVariables') }}
             </el-button>
@@ -48,7 +57,13 @@
             <el-button link type="primary" @click="$emit('duplicate', scope.row)" size="small">
               {{ $t('apiTesting.component.environmentTable.copy') }}
             </el-button>
-            <el-button link type="danger" @click="$emit('delete', scope.row)" size="small">
+            <el-button
+              link
+              type="danger"
+              :disabled="scope.row.is_active"
+              @click="$emit('delete', scope.row)"
+              size="small"
+            >
               {{ $t('apiTesting.component.environmentTable.delete') }}
             </el-button>
           </el-button-group>
@@ -122,7 +137,7 @@ defineProps({
   }
 })
 
-defineEmits(['edit', 'delete', 'activate', 'duplicate'])
+defineEmits(['edit', 'delete', 'activate', 'deactivate', 'duplicate'])
 
 const showViewDialog = ref(false)
 const viewingEnvironment = ref(null)
