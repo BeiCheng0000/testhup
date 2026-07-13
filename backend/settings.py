@@ -158,6 +158,12 @@ STATIC_FILES_ROOT = os.path.join(BASE_DIR, 'static_files')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# Agent 设备执行策略配置
+# 'auto': 自动选择（TCP直连优先，不可达时回退到Agent远程执行）
+# 'direct_tcp': 强制使用 TCP 直连（方案A）
+# 'agent_remote': 强制使用 Agent 远程执行（方案B）
+AGENT_EXECUTION_STRATEGY = 'auto'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model

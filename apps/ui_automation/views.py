@@ -156,6 +156,10 @@ class UiProjectViewSet(viewsets.ModelViewSet):
         log_operation('edit', 'project', instance.id, instance.name, self.request.user)
 
     def perform_destroy(self, instance):
+        # 只有项目负责人才能删除项目
+        if instance.owner != self.request.user:
+            from rest_framework import permissions
+            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除项目'})
         # 记录操作（在删除前记录）
         log_operation('delete', 'project', instance.id, instance.name, self.request.user)
         instance.delete()

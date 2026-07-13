@@ -30,3 +30,615 @@
 [2026-06-21 11:29:34,137: INFO/MainProcess] celery@PC-20231108VKVI ready.
 [2026-06-21 11:34:36,196: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[5dd63e3e-9c1e-47df-8f8f-a419405c47a4] received
 [2026-06-21 11:34:58,178: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[5dd63e3e-9c1e-47df-8f8f-a419405c47a4] succeeded in 21.984000000054948s: {'record_id': 4, 'status': 'completed', 'success_count': 171, 'failed_count': 0}
+[2026-06-21 11:55:11,525: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 11:55:11,527: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 11:55:12,534: INFO/MainProcess] mingle: all alone
+[2026-06-21 11:55:12,542: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-21 11:55:12,739: INFO/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[6d08a174-f055-46ac-b06f-b58d830304bc] received
+[2026-06-21 11:55:13,015: ERROR/MainProcess] Task apps.testcases.tasks.import_testcases_from_excel[6d08a174-f055-46ac-b06f-b58d830304bc] raised unexpected: ValueError('导入模板表头不匹配，请先下载最新模板后再导入')
+Traceback (most recent call last):
+  File "E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\celery\app\trace.py", line 477, in trace_task
+    R = retval = fun(*args, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\celery\app\trace.py", line 760, in __protected_call__
+    return self.run(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "e:\wk\wk_python\testhub_platform-main\apps\testcases\tasks.py", line 18, in import_testcases_from_excel
+    summary = TestCaseExcelImportService.import_record(record, version_ids or [])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "e:\wk\wk_python\testhub_platform-main\apps\testcases\services.py", line 172, in import_record
+    raise ValueError('导入模板表头不匹配，请先下载最新模板后再导入')
+ValueError: 导入模板表头不匹配，请先下载最新模板后再导入
+[2026-06-21 15:46:03,342: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-21 15:46:03,345: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-21 15:46:04,352: INFO/MainProcess] mingle: all alone
+[2026-06-21 15:46:04,359: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-22 13:29:15,123: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-22 13:29:15,125: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-22 13:29:16,132: INFO/MainProcess] mingle: all alone
+[2026-06-22 13:29:16,147: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-22 18:16:23,981: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-22 18:16:23,998: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-22 18:16:25,005: INFO/MainProcess] mingle: all alone
+[2026-06-22 18:16:25,015: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-22 18:20:01,222: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-22 18:20:01,224: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-22 18:20:02,231: INFO/MainProcess] mingle: all alone
+[2026-06-22 18:20:02,239: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-22 18:23:35,358: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-22 18:23:35,359: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-22 18:23:36,366: INFO/MainProcess] mingle: all alone
+[2026-06-22 18:23:36,375: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-22 18:23:46,621: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-22 18:23:46,623: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-22 18:23:47,628: INFO/MainProcess] mingle: all alone
+[2026-06-22 18:23:47,636: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-22 18:37:53,707: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-22 18:37:53,711: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-22 18:37:54,717: INFO/MainProcess] mingle: all alone
+[2026-06-22 18:37:54,725: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:18:25,408: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[7bedd30c-9102-4f53-aa42-bbb41baa81b7] received
+[2026-06-23 09:18:25,814: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:18:25,866: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:18:25,925: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:18:25,925: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:18:25,926: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_1 --tb=short
+[2026-06-23 09:18:25,927: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:18:25,927: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:18:50,321: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:18:50,888: INFO/MainProcess] [pytest] FAILED[09:18:50][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:18:51,899: INFO/MainProcess] [pytest] [09:18:51][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:18:51,923: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:18:51,899 screen_proxy 27876 32224 b''
+[2026-06-23 09:18:51,923: INFO/MainProcess] [pytest] [09:18:51][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:18:51,924: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:18:51,923 screen_proxy 27876 32224 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:18:51,924: INFO/MainProcess] [pytest] [09:18:51][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:18:51,924: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:18:51,923 screen_proxy 27876 32224 Minicap setup up failed!
+[2026-06-23 09:18:59,088: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:18:59,089: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:18:59,090: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:18:59,090: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:18:59,090: INFO/MainProcess] [pytest] ============================= 1 failed in 25.98s ==============================
+[2026-06-23 09:19:00,443: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:19:00,443: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:19:00,444: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:19:00,445: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:19:00,445: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_1 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_1 --clean
+[2026-06-23 09:19:14,712: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_1
+[2026-06-23 09:19:14,714: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_1
+[2026-06-23 09:19:14,714: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:19:14,861: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:19:15,087: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:19:15,104: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[7bedd30c-9102-4f53-aa42-bbb41baa81b7] succeeded in 49.68700000003446s: None
+[2026-06-23 09:22:13,255: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[4e11f9ee-e68d-4713-9cb2-f9cc6788d93f] received
+[2026-06-23 09:22:13,359: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:22:13,553: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:22:13,668: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:22:13,668: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:22:13,670: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_2 --tb=short
+[2026-06-23 09:22:13,671: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:22:13,671: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:22:25,836: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:22:26,279: INFO/MainProcess] [pytest] FAILED[09:22:26][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:22:27,310: INFO/MainProcess] [pytest] [09:22:27][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:22:27,312: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:22:27,310 screen_proxy 4660 23740 b''
+[2026-06-23 09:22:27,312: INFO/MainProcess] [pytest] [09:22:27][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:22:27,312: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:22:27,312 screen_proxy 4660 23740 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:22:27,312: INFO/MainProcess] [pytest] [09:22:27][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:22:27,313: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:22:27,312 screen_proxy 4660 23740 Minicap setup up failed!
+[2026-06-23 09:22:31,567: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:22:31,568: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:22:31,568: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:22:31,568: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:22:31,569: INFO/MainProcess] [pytest] ============================= 1 failed in 14.24s ==============================
+[2026-06-23 09:22:32,981: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:22:32,981: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:22:32,982: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:22:32,982: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:22:32,983: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_2 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_2 --clean
+[2026-06-23 09:22:45,328: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_2
+[2026-06-23 09:22:45,329: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_2
+[2026-06-23 09:22:45,330: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:22:45,510: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:22:45,578: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:22:45,579: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[4e11f9ee-e68d-4713-9cb2-f9cc6788d93f] succeeded in 32.31200000003446s: None
+[2026-06-23 09:24:45,952: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[7bbaf158-c787-44cd-acab-fec191c3e0d5] received
+[2026-06-23 09:24:46,036: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:24:46,095: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:24:46,152: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:24:46,152: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:24:46,153: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_3 --tb=short
+[2026-06-23 09:24:46,153: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:24:46,153: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:24:51,465: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:24:51,782: INFO/MainProcess] [pytest] FAILED[09:24:51][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:24:52,906: INFO/MainProcess] [pytest] [09:24:52][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:24:52,907: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:24:52,906 screen_proxy 13592 19192 b''
+[2026-06-23 09:24:52,907: INFO/MainProcess] [pytest] [09:24:52][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:24:52,907: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:24:52,906 screen_proxy 13592 19192 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:24:52,907: INFO/MainProcess] [pytest] [09:24:52][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:24:52,908: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:24:52,907 screen_proxy 13592 19192 Minicap setup up failed!
+[2026-06-23 09:24:57,140: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:24:57,141: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:24:57,141: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:24:57,141: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:24:57,141: INFO/MainProcess] [pytest] ============================== 1 failed in 8.90s ==============================
+[2026-06-23 09:24:58,676: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:24:58,676: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:24:58,677: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:24:58,677: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:24:58,678: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_3 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_3 --clean
+[2026-06-23 09:25:03,336: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_3
+[2026-06-23 09:25:03,337: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_3
+[2026-06-23 09:25:03,337: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:25:03,568: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:25:03,623: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:25:03,624: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[7bbaf158-c787-44cd-acab-fec191c3e0d5] succeeded in 17.67200000002049s: None
+[2026-06-23 09:27:13,581: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[5e8f0416-26b0-436b-bc1f-bc656d2c3368] received
+[2026-06-23 09:27:13,678: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:27:13,734: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:27:13,781: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:27:13,781: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:27:13,783: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_4 --tb=short
+[2026-06-23 09:27:13,783: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:27:13,783: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:27:18,639: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:27:18,922: INFO/MainProcess] [pytest] FAILED[09:27:18][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:27:19,936: INFO/MainProcess] [pytest] [09:27:19][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:27:19,937: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:27:19,936 screen_proxy 14872 27700 b''
+[2026-06-23 09:27:19,937: INFO/MainProcess] [pytest] [09:27:19][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:27:19,937: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:27:19,936 screen_proxy 14872 27700 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:27:19,938: INFO/MainProcess] [pytest] [09:27:19][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:27:19,938: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:27:19,937 screen_proxy 14872 27700 Minicap setup up failed!
+[2026-06-23 09:27:24,040: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:27:24,040: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:27:24,040: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:27:24,040: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:27:24,040: INFO/MainProcess] [pytest] ============================== 1 failed in 8.35s ==============================
+[2026-06-23 09:27:25,194: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:27:25,194: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:27:25,195: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:27:25,196: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:27:25,196: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_4 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_4 --clean
+[2026-06-23 09:27:28,642: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_4
+[2026-06-23 09:27:28,643: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_4
+[2026-06-23 09:27:28,643: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:27:28,740: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:27:28,780: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:27:28,781: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[5e8f0416-26b0-436b-bc1f-bc656d2c3368] succeeded in 15.202999999979511s: None
+[2026-06-23 09:30:04,407: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 09:30:04,408: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 09:30:05,414: INFO/MainProcess] mingle: all alone
+[2026-06-23 09:30:05,423: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:30:12,235: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[2dfd428e-baf0-4956-b2e0-96e469dff0d5] received
+[2026-06-23 09:30:12,356: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:30:12,403: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:30:12,490: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:30:12,490: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:30:12,491: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_5 --tb=short
+[2026-06-23 09:30:12,491: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:30:12,491: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:30:17,441: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:30:17,737: INFO/MainProcess] [pytest] FAILED[09:30:17][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:30:18,760: INFO/MainProcess] [pytest] [09:30:18][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:30:18,761: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:30:18,760 screen_proxy 19872 23520 b''
+[2026-06-23 09:30:18,761: INFO/MainProcess] [pytest] [09:30:18][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:30:18,761: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:30:18,761 screen_proxy 19872 23520 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:30:18,762: INFO/MainProcess] [pytest] [09:30:18][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:30:18,762: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:30:18,761 screen_proxy 19872 23520 Minicap setup up failed!
+[2026-06-23 09:30:22,922: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:30:22,922: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:30:22,922: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:30:22,922: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:30:22,923: INFO/MainProcess] [pytest] ============================== 1 failed in 8.57s ==============================
+[2026-06-23 09:30:24,138: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:30:24,138: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:30:24,138: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:30:24,140: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:30:24,141: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_5 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_5 --clean
+[2026-06-23 09:30:27,765: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_5
+[2026-06-23 09:30:27,767: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_5
+[2026-06-23 09:30:27,767: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:30:27,853: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:30:27,900: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:30:27,918: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[2dfd428e-baf0-4956-b2e0-96e469dff0d5] succeeded in 15.672000000020489s: None
+[2026-06-23 09:34:10,745: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 09:34:10,746: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 09:34:11,752: INFO/MainProcess] mingle: all alone
+[2026-06-23 09:34:11,761: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:34:14,878: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[68b445ef-5c1b-4541-a1c0-ca071ef5ce02] received
+[2026-06-23 09:34:15,103: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:34:15,157: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:34:15,199: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:34:15,199: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:34:15,201: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_6 --tb=short
+[2026-06-23 09:34:15,202: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:34:15,202: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:34:33,123: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:34:35,567: INFO/MainProcess] [pytest] FAILED[09:34:35][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:34:36,590: INFO/MainProcess] [pytest] [09:34:36][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:34:36,591: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:34:36,590 screen_proxy 8416 27536 b''
+[2026-06-23 09:34:36,591: INFO/MainProcess] [pytest] [09:34:36][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:34:36,604: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:34:36,591 screen_proxy 8416 27536 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:34:36,604: INFO/MainProcess] [pytest] [09:34:36][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:34:36,604: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:34:36,591 screen_proxy 8416 27536 Minicap setup up failed!
+[2026-06-23 09:34:38,832: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:34:38,832: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:34:38,832: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:34:38,832: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:34:38,833: INFO/MainProcess] [pytest] ============================= 1 failed in 19.74s ==============================
+[2026-06-23 09:34:40,016: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:34:40,016: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:34:40,017: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:34:40,033: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:34:40,033: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_6 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_6 --clean
+[2026-06-23 09:34:45,440: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_6
+[2026-06-23 09:34:45,441: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_6
+[2026-06-23 09:34:45,441: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:34:45,537: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:34:45,585: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:34:45,601: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[68b445ef-5c1b-4541-a1c0-ca071ef5ce02] succeeded in 30.73499999998603s: None
+[2026-06-23 09:35:03,832: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 09:35:03,834: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 09:35:04,839: INFO/MainProcess] mingle: all alone
+[2026-06-23 09:35:04,846: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:35:08,970: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[0048794a-ff8e-4e6b-9a85-2df7cdf03b2f] received
+[2026-06-23 09:35:09,062: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:35:09,103: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:35:09,155: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:35:09,156: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:35:09,157: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_7 --tb=short
+[2026-06-23 09:35:09,157: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:35:09,157: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:35:13,777: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:35:16,028: INFO/MainProcess] [pytest] FAILED[09:35:16][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:35:17,030: INFO/MainProcess] [pytest] [09:35:17][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:35:17,030: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:35:17,030 screen_proxy 23708 32944 b''
+[2026-06-23 09:35:17,031: INFO/MainProcess] [pytest] [09:35:17][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:35:17,031: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:35:17,030 screen_proxy 23708 32944 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:35:17,031: INFO/MainProcess] [pytest] [09:35:17][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:35:17,031: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:35:17,030 screen_proxy 23708 32944 Minicap setup up failed!
+[2026-06-23 09:35:19,177: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:35:19,177: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:35:19,177: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:35:19,177: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:35:19,178: INFO/MainProcess] [pytest] ============================== 1 failed in 8.33s ==============================
+[2026-06-23 09:35:20,798: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:35:20,798: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:35:20,799: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:35:20,800: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:35:20,800: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_7 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_7 --clean
+[2026-06-23 09:35:25,080: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_7
+[2026-06-23 09:35:25,082: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_7
+[2026-06-23 09:35:25,082: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:35:25,177: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:35:25,217: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:35:25,234: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[0048794a-ff8e-4e6b-9a85-2df7cdf03b2f] succeeded in 16.265999999945052s: None
+[2026-06-23 09:41:54,858: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 09:41:54,859: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 09:41:55,865: INFO/MainProcess] mingle: all alone
+[2026-06-23 09:41:55,871: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:42:37,535: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[70313432-a993-4fa7-9585-d293c887cc95] received
+[2026-06-23 09:42:37,702: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:42:37,764: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:42:37,807: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:42:37,807: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:42:37,808: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_8 --tb=short
+[2026-06-23 09:42:37,808: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:42:37,808: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:42:42,997: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:42:46,335: INFO/MainProcess] [pytest] [09:42:46][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:42:46,335: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:42:46,335 screen_proxy 27884 22464 b''
+[2026-06-23 09:42:46,336: INFO/MainProcess] [pytest] [09:42:46][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:42:46,336: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:42:46,335 screen_proxy 27884 22464 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:42:46,337: INFO/MainProcess] [pytest] [09:42:46][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:42:46,337: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:42:46,335 screen_proxy 27884 22464 Minicap setup up failed!
+[2026-06-23 09:42:49,699: INFO/MainProcess] [pytest] PASSED[09:42:49][DEBUG]<airtest.utils.nbsp> [javacap_sever]b''
+[2026-06-23 09:42:49,810: INFO/MainProcess] [pytest] ============================== 1 passed in 9.96s ==============================
+[2026-06-23 09:42:51,601: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:42:51,601: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 09:42:51,601: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 09:42:51,603: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:42:51,603: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_8 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_8 --clean
+[2026-06-23 09:42:55,282: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_8
+[2026-06-23 09:42:55,284: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_8
+[2026-06-23 09:42:55,372: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 09:42:55,429: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:42:55,444: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[70313432-a993-4fa7-9585-d293c887cc95] succeeded in 17.905999999959022s: None
+[2026-06-23 09:45:56,571: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[f065ec29-d9c4-4c96-9d27-5a6e16fae619] received
+[2026-06-23 09:45:56,680: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:45:56,728: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:45:56,771: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:45:56,771: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:45:56,773: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_9 --tb=short
+[2026-06-23 09:45:56,773: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:45:56,773: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:46:01,480: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:46:03,791: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:46:03,790 ui_flow_runner 4228 8812 步骤 1 执行失败: uiautomator2 未安装，请执行: pip install uiautomator2
+[2026-06-23 09:46:04,788: INFO/MainProcess] [pytest] [09:46:04][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:46:04,788: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:46:04,788 screen_proxy 4228 8812 b''
+[2026-06-23 09:46:04,788: INFO/MainProcess] [pytest] [09:46:04][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:46:04,789: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:46:04,788 screen_proxy 4228 8812 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:46:04,789: INFO/MainProcess] [pytest] [09:46:04][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:46:04,789: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:46:04,788 screen_proxy 4228 8812 Minicap setup up failed!
+[2026-06-23 09:46:06,889: INFO/MainProcess] [pytest] FAILED[09:46:06][DEBUG]<airtest.utils.nbsp> [javacap_sever]b''
+[2026-06-23 09:46:07,569: INFO/MainProcess] [pytest] ERROR    apps.app_automation.runners.ui_flow_runner:ui_flow_runner.py:160 步骤 1 执行失败: uiautomator2 未安装，请执行: pip install uiautomator2
+[2026-06-23 09:46:07,570: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:56 b''
+[2026-06-23 09:46:07,570: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:57 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:46:07,571: INFO/MainProcess] [pytest] ERROR    airtest.core.android.cap_methods.screen_proxy:screen_proxy.py:60 Minicap setup up failed!
+[2026-06-23 09:46:07,571: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 09:46:07,572: INFO/MainProcess] [pytest] ============================== 1 failed in 8.99s ==============================
+[2026-06-23 09:46:08,789: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:46:08,790: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 09:46:08,790: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=1
+[2026-06-23 09:46:08,792: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:46:08,792: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_9 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_9 --clean
+[2026-06-23 09:46:12,304: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_9
+[2026-06-23 09:46:12,306: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_9
+[2026-06-23 09:46:12,306: INFO/MainProcess] 检测到 broken 用例 1 个（已计入失败统计）。
+[2026-06-23 09:46:12,409: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 09:46:12,502: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:46:12,505: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[f065ec29-d9c4-4c96-9d27-5a6e16fae619] succeeded in 15.937000000034459s: None
+[2026-06-23 09:47:42,324: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 09:47:42,325: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 09:47:43,330: INFO/MainProcess] mingle: all alone
+[2026-06-23 09:47:43,337: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:47:44,932: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[acc064f6-3ac3-489b-b9fa-0b011b7790e0] received
+[2026-06-23 09:47:45,022: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:47:45,062: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:47:45,114: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:47:45,114: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:47:45,115: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_10 --tb=short
+[2026-06-23 09:47:45,115: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:47:45,116: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:47:49,819: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:47:54,255: INFO/MainProcess] [pytest] PASSED[09:47:54][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell ls "/data/local/tmp/minicap"
+[2026-06-23 09:47:55,260: INFO/MainProcess] [pytest] [09:47:55][ERROR]<airtest.core.android.cap_methods.screen_proxy> b''
+[2026-06-23 09:47:55,261: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:47:55,260 screen_proxy 29304 28924 b''
+[2026-06-23 09:47:55,261: INFO/MainProcess] [pytest] [09:47:55][ERROR]<airtest.core.android.cap_methods.screen_proxy> b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:47:55,261: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:47:55,260 screen_proxy 29304 28924 b"mv: bad '/data/local/tmp/minicap': Invalid argument\r\n"
+[2026-06-23 09:47:55,261: INFO/MainProcess] [pytest] [09:47:55][ERROR]<airtest.core.android.cap_methods.screen_proxy> Minicap setup up failed!
+[2026-06-23 09:47:55,262: INFO/MainProcess] [pytest] ERROR 2026-06-23 09:47:55,261 screen_proxy 29304 28924 Minicap setup up failed!
+[2026-06-23 09:47:57,344: INFO/MainProcess] [pytest] ============================= 1 passed in 10.48s ==============================
+[2026-06-23 09:47:58,555: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:47:58,555: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 09:47:58,556: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 09:47:58,556: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:47:58,557: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_10 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_10 --clean
+[2026-06-23 09:48:10,950: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_10
+[2026-06-23 09:48:10,951: INFO/MainProcess] 报告已生成: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_10
+[2026-06-23 09:48:11,057: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 09:48:11,114: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:48:11,142: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[acc064f6-3ac3-489b-b9fa-0b011b7790e0] succeeded in 26.20299999997951s: None
+[2026-06-23 09:54:38,674: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 09:54:38,676: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 09:54:39,684: INFO/MainProcess] mingle: all alone
+[2026-06-23 09:54:39,691: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 09:55:44,657: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[bce4784e-eb83-4995-abd5-5f2a94e0cfcd] received
+[2026-06-23 09:55:44,757: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:55:44,815: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:55:44,849: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:55:44,849: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:55:44,852: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_11 --tb=short
+[2026-06-23 09:55:44,852: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:55:44,852: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:56:04,153: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:56:08,568: INFO/MainProcess] [pytest] PASSED[09:56:08][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell screencap -p
+[2026-06-23 09:56:10,134: INFO/MainProcess] [pytest] ======================== 1 passed, 1 warning in 21.58s ========================
+[2026-06-23 09:56:11,283: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:56:11,283: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 09:56:11,284: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 09:56:11,300: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=11
+[2026-06-23 09:56:11,300: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[242c25e6-dec4-420b-b193-5846009f9560] received
+[2026-06-23 09:56:11,315: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:56:11,315: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:56:11,315: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_11 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_11 --clean
+[2026-06-23 09:56:11,418: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 09:56:11,459: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:56:11,460: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[bce4784e-eb83-4995-abd5-5f2a94e0cfcd] succeeded in 26.796999999904074s: None
+[2026-06-23 09:56:17,192: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_11
+[2026-06-23 09:56:17,236: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_11
+[2026-06-23 09:56:17,261: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[242c25e6-dec4-420b-b193-5846009f9560] succeeded in 5.952999999979511s: None
+[2026-06-23 09:57:07,863: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[4ec513fb-63a1-433b-8c86-e1b8ed79a7a7] received
+[2026-06-23 09:57:07,976: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 09:57:08,114: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 09:57:08,166: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:57:08,166: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 09:57:08,168: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_12 --tb=short
+[2026-06-23 09:57:08,168: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:57:08,168: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 09:57:12,697: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 09:57:18,096: INFO/MainProcess] [pytest] PASSED[09:57:18][DEBUG]<airtest.utils.nbsp> [rotation_server]b''
+[2026-06-23 09:57:18,105: INFO/MainProcess] [pytest] ======================== 1 passed, 1 warning in 8.25s =========================
+[2026-06-23 09:57:19,209: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 09:57:19,209: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 09:57:19,210: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 09:57:19,211: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=12
+[2026-06-23 09:57:19,212: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[b8aeee62-3a90-4b07-a2cc-e1dda6a0d334] received
+[2026-06-23 09:57:19,215: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 09:57:19,218: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 09:57:19,218: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_12 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_12 --clean
+[2026-06-23 09:57:19,418: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 09:57:19,459: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 09:57:19,460: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[4ec513fb-63a1-433b-8c86-e1b8ed79a7a7] succeeded in 11.593999999924563s: None
+[2026-06-23 09:57:22,664: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_12
+[2026-06-23 09:57:22,713: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_12
+[2026-06-23 09:57:22,714: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[b8aeee62-3a90-4b07-a2cc-e1dda6a0d334] succeeded in 3.5s: None
+[2026-06-23 10:02:57,588: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-23 10:02:57,590: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-23 10:02:58,596: INFO/MainProcess] mingle: all alone
+[2026-06-23 10:02:58,605: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-23 10:06:01,649: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[fcbc477a-3c8d-4401-9be4-a83862628923] received
+[2026-06-23 10:06:01,813: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 10:06:01,871: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 10:06:01,908: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 10:06:01,908: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 10:06:01,912: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_13 --tb=short
+[2026-06-23 10:06:01,912: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 10:06:01,912: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 10:06:15,249: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 10:06:21,226: INFO/MainProcess] [pytest] PASSED[10:06:21][DEBUG]<airtest.utils.nbsp> [rotation_server]b''
+[2026-06-23 10:06:21,248: INFO/MainProcess] [pytest] ======================== 1 passed, 1 warning in 15.48s ========================
+[2026-06-23 10:06:22,684: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 10:06:22,684: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 10:06:22,685: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 10:06:22,701: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=13
+[2026-06-23 10:06:22,701: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[c4c1e81f-eb87-45ff-bba8-3c4250d881f3] received
+[2026-06-23 10:06:22,706: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 10:06:22,730: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 10:06:22,730: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_13 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_13 --clean
+[2026-06-23 10:06:22,797: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 10:06:22,854: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 10:06:22,855: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[fcbc477a-3c8d-4401-9be4-a83862628923] succeeded in 21.20299999997951s: None
+[2026-06-23 10:06:26,482: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_13
+[2026-06-23 10:06:26,669: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_13
+[2026-06-23 10:06:26,685: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[c4c1e81f-eb87-45ff-bba8-3c4250d881f3] succeeded in 3.98499999998603s: None
+[2026-06-23 10:06:58,560: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[ebd3ffde-6f4f-4c72-b9a1-44416918a972] received
+[2026-06-23 10:06:58,696: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 10:06:58,744: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 10:06:58,786: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 10:06:58,787: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 10:06:58,788: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_14 --tb=short
+[2026-06-23 10:06:58,788: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 10:06:58,788: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 10:07:03,815: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 10:07:08,204: INFO/MainProcess] [pytest] PASSED[10:07:08][DEBUG]<airtest.core.android.adb> C:\Windows\SysWOW64\adb.exe -s XWSF452620250003 shell screencap -p
+[2026-06-23 10:07:09,755: INFO/MainProcess] [pytest] ======================== 1 passed, 1 warning in 9.22s =========================
+[2026-06-23 10:07:11,213: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 10:07:11,214: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 10:07:11,214: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 10:07:11,215: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=14
+[2026-06-23 10:07:11,217: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[cadd4423-474e-41fc-914f-d2b035ee68e5] received
+[2026-06-23 10:07:11,221: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 10:07:11,222: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 10:07:11,222: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_14 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_14 --clean
+[2026-06-23 10:07:11,357: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 10:07:11,405: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 10:07:11,406: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[ebd3ffde-6f4f-4c72-b9a1-44416918a972] succeeded in 12.84299999999348s: None
+[2026-06-23 10:07:14,960: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_14
+[2026-06-23 10:07:15,018: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_14
+[2026-06-23 10:07:15,018: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[cadd4423-474e-41fc-914f-d2b035ee68e5] succeeded in 3.797000000020489s: None
+[2026-06-23 17:34:45,192: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[5ef8aa5e-1ed2-429e-ae8d-6c5f41975cc2] received
+[2026-06-23 17:34:45,295: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 17:34:45,335: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 17:34:45,379: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:34:45,379: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 17:34:45,380: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_15 --tb=short
+[2026-06-23 17:34:45,380: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:34:45,380: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 17:35:09,635: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 17:35:34,749: INFO/MainProcess] [pytest] ERROR 2026-06-23 17:35:34,735 ui_flow_runner 13488 16316 步骤 4 执行失败: 期望元素存在，但实际不存在
+[2026-06-23 17:35:38,284: INFO/MainProcess] [pytest] FAILED[17:35:38][DEBUG]<airtest.core.android.adb> E:\it_install\android-sdk-windows\platform-tools\adb.exe -s XWSF452620250003 shell ls -l /data/local/tmp/maxpresent.jar
+[2026-06-23 17:35:39,030: INFO/MainProcess] [pytest] ERROR    apps.app_automation.runners.ui_flow_runner:ui_flow_runner.py:160 步骤 4 执行失败: 期望元素存在，但实际不存在
+[2026-06-23 17:35:39,030: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 17:35:39,030: INFO/MainProcess] [pytest] ======================== 1 failed, 1 warning in 45.91s ========================
+[2026-06-23 17:35:40,417: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 17:35:40,418: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 17:35:40,418: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=0
+[2026-06-23 17:35:40,419: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=15
+[2026-06-23 17:35:40,420: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[d7364a0b-60aa-49ab-bb59-a03eac214594] received
+[2026-06-23 17:35:40,433: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:35:40,433: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 17:35:40,434: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_15 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_15 --clean
+[2026-06-23 17:35:40,584: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 17:35:40,641: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 17:35:40,642: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[5ef8aa5e-1ed2-429e-ae8d-6c5f41975cc2] succeeded in 55.43799999996554s: None
+[2026-06-23 17:35:46,632: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_15
+[2026-06-23 17:35:46,725: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_15
+[2026-06-23 17:35:46,725: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[d7364a0b-60aa-49ab-bb59-a03eac214594] succeeded in 6.312999999965541s: None
+[2026-06-23 17:39:04,838: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[c09f04b1-101b-44e0-912a-f09e3d313c57] received
+[2026-06-23 17:39:04,913: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 17:39:04,953: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 17:39:04,998: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:39:04,998: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 17:39:05,000: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_16 --tb=short
+[2026-06-23 17:39:05,000: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:39:05,000: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 17:39:09,584: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 17:39:16,827: INFO/MainProcess] [pytest] ERROR 2026-06-23 17:39:16,826 ui_flow_runner 29100 24744 步骤 4 执行失败: 期望元素存在，但实际不存在
+[2026-06-23 17:39:18,962: INFO/MainProcess] [pytest] FAILED[17:39:18][DEBUG]<airtest.core.android.adb> E:\it_install\android-sdk-windows\platform-tools\adb.exe -s XWSF452620250003 shell ls -l /data/local/tmp/maxpresent.jar
+[2026-06-23 17:39:19,571: INFO/MainProcess] [pytest] ERROR    apps.app_automation.runners.ui_flow_runner:ui_flow_runner.py:160 步骤 4 执行失败: 期望元素存在，但实际不存在
+[2026-06-23 17:39:19,571: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 17:39:19,571: INFO/MainProcess] [pytest] ======================== 1 failed, 1 warning in 12.82s ========================
+[2026-06-23 17:39:20,758: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 17:39:20,758: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 17:39:20,759: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=0
+[2026-06-23 17:39:20,760: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=16
+[2026-06-23 17:39:20,760: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[10b8e0a3-b8b2-498c-8cba-1a29d68523ae] received
+[2026-06-23 17:39:20,775: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:39:20,795: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 17:39:20,795: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_16 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_16 --clean
+[2026-06-23 17:39:20,860: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 17:39:20,900: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 17:39:20,901: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[c09f04b1-101b-44e0-912a-f09e3d313c57] succeeded in 16.061999999918044s: None
+[2026-06-23 17:39:24,339: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_16
+[2026-06-23 17:39:24,454: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_16
+[2026-06-23 17:39:24,455: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[10b8e0a3-b8b2-498c-8cba-1a29d68523ae] succeeded in 3.687000000034459s: None
+[2026-06-23 17:40:09,420: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[c0f39fbb-2dec-4062-acfc-51b56b56adcf] received
+[2026-06-23 17:40:09,521: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 17:40:09,584: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 17:40:09,813: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:40:09,814: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 17:40:09,814: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_17 --tb=short
+[2026-06-23 17:40:09,814: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:40:09,814: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 17:40:14,354: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 17:40:21,221: INFO/MainProcess] [pytest] ERROR 2026-06-23 17:40:21,220 ui_flow_runner 14868 8588 步骤 4 执行失败: 期望元素存在，但实际不存在
+[2026-06-23 17:40:23,304: INFO/MainProcess] [pytest] FAILED[17:40:23][DEBUG]<airtest.core.android.adb> E:\it_install\android-sdk-windows\platform-tools\adb.exe -s XWSF452620250003 shell ls -l /data/local/tmp/maxpresent.jar
+[2026-06-23 17:40:23,906: INFO/MainProcess] [pytest] ERROR    apps.app_automation.runners.ui_flow_runner:ui_flow_runner.py:160 步骤 4 执行失败: 期望元素存在，但实际不存在
+[2026-06-23 17:40:23,907: INFO/MainProcess] [pytest] FAILED apps/app_automation/tests/test_app_flow.py::TestAppFlow::test_execute_ui_flow
+[2026-06-23 17:40:23,907: INFO/MainProcess] [pytest] ======================== 1 failed, 1 warning in 12.34s ========================
+[2026-06-23 17:40:25,061: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 17:40:25,062: INFO/MainProcess] pytest 执行完成，退出码: 1
+[2026-06-23 17:40:25,062: INFO/MainProcess] 测试结果统计: 总数=1, 通过=0, 失败=1, 跳过=0, broken=0
+[2026-06-23 17:40:25,063: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=17
+[2026-06-23 17:40:25,064: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[76a93bd4-c721-4c04-9006-a2cb69062c16] received
+[2026-06-23 17:40:25,067: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:40:25,068: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 17:40:25,068: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_17 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_17 --clean
+[2026-06-23 17:40:25,168: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: failed
+[2026-06-23 17:40:25,224: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 17:40:25,225: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[c0f39fbb-2dec-4062-acfc-51b56b56adcf] succeeded in 15.797000000020489s: None
+[2026-06-23 17:40:28,498: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_17
+[2026-06-23 17:40:28,553: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_17
+[2026-06-23 17:40:28,554: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[76a93bd4-c721-4c04-9006-a2cb69062c16] succeeded in 3.484000000054948s: None
+[2026-06-23 17:42:21,544: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[73a2ccd9-2ee0-4815-aec7-d3751336e07a] received
+[2026-06-23 17:42:21,659: INFO/MainProcess] 开始执行APP测试: 测试自动化
+[2026-06-23 17:42:21,695: INFO/MainProcess] 设备已锁定: XWSF452620250003
+[2026-06-23 17:42:21,739: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:42:21,739: INFO/MainProcess] 开始执行APP测试: test_case_id=1, device=XWSF452620250003
+[2026-06-23 17:42:21,739: INFO/MainProcess] 执行命令: E:\wk\wk_python\testhub_platform-main\venv\Scripts\python.exe -m pytest apps/app_automation/tests/ -s -v --alluredir E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_18 --tb=short
+[2026-06-23 17:42:21,739: INFO/MainProcess] 工作目录: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:42:21,740: INFO/MainProcess] PYTHONPATH: E:\wk\wk_python\testhub_platform-main;E:\wk\wk_python\testhub_platform-main\apps;C:\Program Files\Python312\DLLs;C:\Program Files\Python312\Lib;C:\Program Files\Python312;E:\wk\wk_python\testhub_platform-main\venv;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\win32\lib;E:\wk\wk_python\testhub_platform-main\venv\Lib\site-packages\pythonwin
+[2026-06-23 17:42:26,261: INFO/MainProcess] [pytest] collecting ... collected 1 item
+[2026-06-23 17:42:38,550: INFO/MainProcess] [pytest] PASSED[17:42:38][DEBUG]<airtest.core.android.adb> E:\it_install\android-sdk-windows\platform-tools\adb.exe -s XWSF452620250003 shell screencap -p
+[2026-06-23 17:42:40,051: INFO/MainProcess] [pytest] ======================== 1 passed, 1 warning in 16.56s ========================
+[2026-06-23 17:42:41,183: INFO/MainProcess] 执行日志已保存: E:\wk\wk_python\testhub_platform-main\logs\app_automation\周锟\2026-06-23.log
+[2026-06-23 17:42:41,183: INFO/MainProcess] pytest 执行完成，退出码: 0
+[2026-06-23 17:42:41,183: INFO/MainProcess] 测试结果统计: 总数=1, 通过=1, 失败=0, 跳过=0, broken=0
+[2026-06-23 17:42:41,184: INFO/MainProcess] Allure 报告异步生成已提交: execution_id=18
+[2026-06-23 17:42:41,185: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[d2e17b2c-f2f3-4228-bbfc-788a59b313aa] received
+[2026-06-23 17:42:41,189: INFO/MainProcess] 初始化 AppTestExecutor，基础路径: E:\wk\wk_python\testhub_platform-main
+[2026-06-23 17:42:41,190: INFO/MainProcess] 使用项目内置 Allure: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat
+[2026-06-23 17:42:41,190: INFO/MainProcess] 生成 Allure 报告: E:\wk\wk_python\testhub_platform-main\allure\bin\allure.bat generate E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-results\execution_18 -o E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_18 --clean
+[2026-06-23 17:42:41,298: INFO/MainProcess] APP测试执行完成: 测试自动化, 状态: completed, 结果: passed
+[2026-06-23 17:42:41,363: INFO/MainProcess] 设备已释放: XWSF452620250003
+[2026-06-23 17:42:41,364: INFO/MainProcess] Task apps.app_automation.tasks.execute_app_test_task[73a2ccd9-2ee0-4815-aec7-d3751336e07a] succeeded in 19.81299999996554s: None
+[2026-06-23 17:42:44,631: INFO/MainProcess] Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_18
+[2026-06-23 17:42:44,683: INFO/MainProcess] 异步 Allure 报告生成成功: E:\wk\wk_python\testhub_platform-main\media\app-automation\allure-reports\execution_18
+[2026-06-23 17:42:44,684: INFO/MainProcess] Task apps.app_automation.tasks.generate_allure_report_async[d2e17b2c-f2f3-4228-bbfc-788a59b313aa] succeeded in 3.5s: None
+[2026-06-24 19:41:51,049: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-24 19:41:51,070: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-24 19:41:52,078: INFO/MainProcess] mingle: all alone
+[2026-06-24 19:41:52,088: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-24 20:05:12,272: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-24 20:05:12,328: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-24 20:05:13,340: INFO/MainProcess] mingle: all alone
+[2026-06-24 20:05:13,348: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-06-29 16:48:27,470: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-06-29 16:48:27,472: INFO/MainProcess] mingle: searching for neighbors
+[2026-06-29 16:48:28,480: INFO/MainProcess] mingle: all alone
+[2026-06-29 16:48:28,488: INFO/MainProcess] celery@PC-20231108VKVI ready.
+[2026-07-01 10:45:12,615: INFO/MainProcess] Connected to redis://127.0.0.1:6379/0
+[2026-07-01 10:45:12,631: INFO/MainProcess] mingle: searching for neighbors
+[2026-07-01 10:45:13,639: INFO/MainProcess] mingle: all alone
+[2026-07-01 10:45:13,655: INFO/MainProcess] celery@PC-20231108VKVI ready.

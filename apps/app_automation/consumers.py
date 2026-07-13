@@ -234,6 +234,8 @@ class AgentConsumer(AsyncJsonWebsocketConsumer):
                 await self._handle_ping(content)
             elif msg_type == "command_result":
                 await self._handle_command_result(content)
+            elif msg_type == "test_progress":
+                await self._handle_test_progress(content)
             else:
                 await self.send_json({
                     "type": "error",
@@ -410,3 +412,58 @@ class AgentConsumer(AsyncJsonWebsocketConsumer):
             agent_registry.resolve_response(self.host_id, request_id, content)
             logger.debug(f"Agent {self.host_id} 命令结果: request_id={request_id}, "
                         f"success={content.get('success')}")
+
+    async def _handle_test_progress(self, content):
+        """
+        处理 Agent 远程测试执行的进度更新
+        
+        Agent 在运行 run_test 期间，会持续发送 test_progress 消息
+        服务器将其转发为 WebSocket execution_update，前端可实时展示进度
+        
+        test_progress 消息格式:
+        {
+            "type": "test_progress",
+            "request_id": "...",
+            "execution_id": 42,
+            "progress": 50,
+            "current_step": "第三步: 登录",
+            "status": "running"
+        }
+        """
+        try:
+            execution_id = content.get("execution_id")
+            progress = content.get("progress")
+            status = content.get("status", "running")
+            message = content.get("current_step", content.get("message", ""))
+            
+            if execution_id is not None:
+                from asgiref.sync import async_to_sync
+                from channels.layers import get_channel_layer
+                
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    await channel_layer.group_send(
+                        f"app_execution_{execution_id}",
+                        {
+                            "type": "execution_update",
+                            "execution_id": int(execution_id),
+                            "status": status,
+                            "progress": progress,
+                            "message": message,
+                            "report_path": None,
+                            "finished_at": None,
+                        }
+                    )
+                    logger.debug(
+                        f"Agent {self.host_id} 测试进度: execution_id={execution_id}, "
+                        f"progress={progress}, step={message}"
+                    )
+            
+            # 同步更新数据库执行记录
+            from .models import AppTestExecution
+            await database_sync_to_async(
+                AppTestExecution.objects.filter(id=execution_id).update
+            )(progress=progress)
+            
+        except Exception as e:
+            logger.error(f"处理 test_progress 失败: {e}", exc_info=True)

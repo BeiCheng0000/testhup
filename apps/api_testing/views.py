@@ -101,7 +101,10 @@ class ApiProjectViewSet(viewsets.ModelViewSet):
         )
     
     def perform_destroy(self, instance):
-        """删除项目时记录日志"""
+        """删除项目时记录日志（只有项目负责人才能删除）"""
+        if instance.owner != self.request.user:
+            from rest_framework import permissions
+            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除项目'})
         log_operation(
             operation_type='delete',
             resource_type='project',
@@ -339,7 +342,11 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        """删除接口时记录日志"""
+        """删除接口时记录日志（只有项目负责人才能删除）"""
+        # 检查是否为所属项目的负责人
+        if instance.collection and instance.collection.project.owner != self.request.user:
+            from rest_framework import permissions
+            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除接口'})
         log_operation(
             operation_type='delete',
             resource_type='request',

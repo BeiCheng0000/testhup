@@ -1,3 +1,23 @@
+# ============================================================
 # TestHub ADB Agent 依赖
 # 远程主机安装: pip install -r requirements-agent.txt
+# ============================================================
+
+# ---- 核心依赖 ----
+# WebSocket 通信（连接 TestHub 服务器）
 websockets>=10.0
+
+# ---- UI 自动化测试（方案B: Agent 远程执行必需）----
+# Airtest 框架：设备连接、截图、触控、元素操作
+airtest==1.4.3
+
+# Pillow：截图 PNG→JPEG 压缩，大幅减少 WebSocket 传输体积
+Pillow>=12.0,<13.0
+
+# ---- 移动端自动化增强（可选但推荐）----
+# uiautomator2：Android UI 层级获取与元素定位
+uiautomator2>=3.0.0
+
+# ---- 日志（可选）----
+# loguru：更友好的日志输出（airtest 内部依赖）
+loguru>=0.7.0

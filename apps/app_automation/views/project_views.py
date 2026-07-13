@@ -44,3 +44,10 @@ class AppProjectViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_destroy(self, instance):
+        """只有项目负责人才能删除项目"""
+        if instance.owner != self.request.user:
+            from rest_framework import permissions
+            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除项目'})
+        instance.delete()

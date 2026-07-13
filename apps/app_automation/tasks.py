@@ -242,14 +242,38 @@ def execute_app_test_task(execution_id, package_name: str = None, scheduled_task
         else:
             final_package_name = test_case.app_package.package_name if test_case.app_package else ""
 
-        executor = AppTestExecutor()
-        report_result = executor.run_tests(
-            test_case_id=test_case.id,
-            device_id=device.device_id,
-            package_name=final_package_name,
-            execution_id=execution_id,
-            username=execution.user.username if execution.user else 'unknown',
-        )
+        # 解析 Agent 设备执行策略
+        from .utils.agent_device import get_execution_strategy, is_agent_device
+        strategy = get_execution_strategy(device.device_id, device)
+        
+        if strategy['strategy'] == 'unavailable':
+            raise RuntimeError(strategy['error'] or f"设备 {device.device_id} 不可用")
+        
+        if strategy['strategy'] == 'agent_remote':
+            # 方案B: Agent 远程执行
+            logger.info(f"使用 Agent 远程执行: host_id={strategy['host_id']}, local_device_id={strategy['local_device_id']}")
+            report_result = _execute_via_agent(
+                execution_id=execution_id,
+                execution=execution,
+                device=device,
+                test_case=test_case,
+                package_name=final_package_name,
+                strategy=strategy,
+            )
+        else:
+            # 方案A 或 本地直连
+            resolved_device_id = strategy['resolved_device_id']
+            if is_agent_device(device.device_id):
+                logger.info(f"Agent 设备 {device.device_id} → TCP 直连: {resolved_device_id}")
+            
+            executor = AppTestExecutor()
+            report_result = executor.run_tests(
+                test_case_id=test_case.id,
+                device_id=resolved_device_id,
+                package_name=final_package_name,
+                execution_id=execution_id,
+                username=execution.user.username if execution.user else 'unknown',
+            )
         
         # 从数据库重新读取最新进度（子进程中的回调可能已经更新过）
         execution.refresh_from_db()
@@ -464,14 +488,36 @@ def execute_app_suite_task(suite_id, execution_ids, package_name=None, scheduled
                     message='正在准备测试环境'
                 )
 
-                executor = AppTestExecutor()
-                report_result = executor.run_tests(
-                    test_case_id=test_case.id,
-                    device_id=device.device_id,
-                    package_name=final_pkg,
-                    execution_id=execution.id,
-                    username=execution.user.username if execution.user else 'unknown',
-                )
+                # 解析 Agent 设备执行策略
+                from .utils.agent_device import get_execution_strategy, is_agent_device
+                strategy = get_execution_strategy(device.device_id, device)
+                
+                if strategy['strategy'] == 'unavailable':
+                    raise RuntimeError(strategy['error'] or f"设备 {device.device_id} 不可用")
+                
+                if strategy['strategy'] == 'agent_remote':
+                    logger.info(f"套件用例 {test_case.name}: Agent 远程执行 host_id={strategy['host_id']}")
+                    report_result = _execute_via_agent(
+                        execution_id=execution.id,
+                        execution=execution,
+                        device=device,
+                        test_case=test_case,
+                        package_name=final_pkg,
+                        strategy=strategy,
+                    )
+                else:
+                    resolved_device_id = strategy['resolved_device_id']
+                    if is_agent_device(device.device_id):
+                        logger.info(f"Agent 设备 {device.device_id} → TCP 直连: {resolved_device_id}")
+                    
+                    executor = AppTestExecutor()
+                    report_result = executor.run_tests(
+                        test_case_id=test_case.id,
+                        device_id=resolved_device_id,
+                        package_name=final_pkg,
+                        execution_id=execution.id,
+                        username=execution.user.username if execution.user else 'unknown',
+                    )
 
                 execution.refresh_from_db()
 
@@ -585,6 +631,165 @@ def execute_app_suite_task(suite_id, execution_ids, package_name=None, scheduled
                     logger.info(f"设备已释放: {device.device_id}")
         except Exception as e:
             logger.error(f"释放设备失败: {str(e)}")
+
+
+def _execute_via_agent(execution_id, execution, device, test_case, package_name, strategy):
+    """
+    方案B: 通过 Agent WebSocket 远程执行测试
+    
+    流程:
+    1. 向 Agent 发送 exec_command (command_type: run_test)
+    2. Agent 在远程主机上运行 airtest 测试
+    3. Agent 通过 test_progress 消息推送进度
+    4. Agent 完成后发送 command_result，包含测试统计和 Allure 结果
+    5. Server 保存结果并生成 Allure 报告
+    """
+    from .managers.agent_registry import agent_registry
+    import base64
+    import json
+    import io
+    import zipfile
+    
+    host_id = strategy['host_id']
+    local_device_id = strategy['local_device_id']
+    
+    logger.info(f"[Agent远程执行] 开始: execution_id={execution_id}, host_id={host_id}, "
+                f"device={local_device_id}, test_case={test_case.name}")
+    
+    send_execution_update(
+        execution_id, status='running', progress=5,
+        message=f'通过 Agent {host_id} 远程执行测试...'
+    )
+    
+    execution.progress = 10
+    execution.save()
+    
+    # 序列化测试用例配置（去除 Django ORM 对象引用）
+    test_case_config = {
+        'id': test_case.id,
+        'name': test_case.name,
+        'ui_flow': test_case.ui_flow if isinstance(test_case.ui_flow, (list, dict)) else [],
+        'variables': test_case.variables if isinstance(test_case.variables, list) else [],
+        'app_package': package_name,
+        'timeout': test_case.timeout,
+    }
+    
+    # 获取 UI 元素图片（如果有图片元素，需要传输到 Agent）
+    # 这里只传输引用的图片路径，Agent 通过 HTTP 下载图片
+    message = {
+        'type': 'exec_command',
+        'command_type': 'run_test',
+        'device_id': local_device_id,
+        'test_case': test_case_config,
+        'package_name': package_name,
+        'execution_id': execution_id,
+        'username': execution.user.username if execution.user else 'unknown',
+        'server_base_url': _get_server_base_url(),  # Agent 下载图片等资源需要
+    }
+    
+    try:
+        # 向 Agent 发送执行命令并等待响应（超时 600s = 10min）
+        result = agent_registry.send_and_wait(
+            host_id=host_id,
+            message=message,
+            timeout=max(test_case.timeout + 60, 600)
+        )
+        
+        logger.info(f"[Agent远程执行] Agent 响应: success={result.get('success')}, "
+                    f"request_id={result.get('request_id')}")
+        
+        if not result.get('success'):
+            error_msg = result.get('message', 'Agent 远程执行失败')
+            raise RuntimeError(f"Agent 远程执行失败: {error_msg}")
+        
+        data = result.get('data', {})
+        test_results = data.get('test_results', {})
+        
+        # 处理 Allure 结果（Agent 返回的 zip base64）
+        allure_results_data = data.get('allure_results_zip', '')
+        if allure_results_data:
+            _save_agent_allure_results(execution_id, allure_results_data)
+            # 异步生成 Allure 报告
+            try:
+                generate_allure_report_async.delay(execution_id)
+                logger.info(f"[Agent远程执行] Allure 报告异步生成已提交")
+            except Exception as e:
+                logger.warning(f"[Agent远程执行] 提交异步报告生成失败: {e}")
+                from .executors.test_executor import AppTestExecutor
+                executor = AppTestExecutor()
+                executor._generate_allure_report(execution_id=execution_id)
+        
+        return {
+            'success': True,
+            'test_results': test_results,
+        }
+        
+    except TimeoutError as e:
+        logger.error(f"[Agent远程执行] 超时: {e}")
+        raise RuntimeError(f"Agent 远程执行超时: {e}")
+    except ConnectionError as e:
+        logger.error(f"[Agent远程执行] Agent 连接失败: {e}")
+        raise RuntimeError(f"Agent {host_id} 连接失败: {e}")
+    except Exception as e:
+        logger.error(f"[Agent远程执行] 失败: {e}", exc_info=True)
+        raise
+
+
+def _get_server_base_url():
+    """获取服务器基础 URL，Agent 用于下载图片等资源"""
+    from django.conf import settings
+    # 尝试从 settings 获取，否则使用默认值
+    base_url = getattr(settings, 'SERVER_BASE_URL', '')
+    if not base_url:
+        # 自动推断：尝试从站点配置获取
+        try:
+            from django.contrib.sites.models import Site
+            site = Site.objects.get_current()
+            base_url = f"http://{site.domain}" if site and site.domain else ""
+        except Exception:
+            pass
+    return base_url or "http://127.0.0.1:8000"
+
+
+def _save_agent_allure_results(execution_id, allure_results_zip_b64):
+    """
+    保存 Agent 返回的 Allure 结果 zip（base64 编码）到本地目录
+    
+    解压到 media/app-automation/allure-results/execution_{id}/
+    """
+    import base64
+    import io
+    import zipfile
+    from django.conf import settings
+    import os
+    
+    results_dir = os.path.join(
+        settings.MEDIA_ROOT, 'app-automation', 'allure-results', f'execution_{execution_id}'
+    )
+    
+    try:
+        # 解码 base64
+        zip_bytes = base64.b64decode(allure_results_zip_b64)
+        
+        # 确保目录干净
+        if os.path.exists(results_dir):
+            import shutil
+            shutil.rmtree(results_dir)
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # 解压
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            zf.extractall(results_dir)
+        
+        # 统计文件数
+        file_count = len([
+            f for f in os.listdir(results_dir)
+            if os.path.isfile(os.path.join(results_dir, f))
+        ])
+        logger.info(f"[Agent远程执行] Allure 结果已保存: {results_dir}, {file_count} 个文件")
+        
+    except Exception as e:
+        logger.error(f"[Agent远程执行] 保存 Allure 结果失败: {e}", exc_info=True)
 
 
 @shared_task

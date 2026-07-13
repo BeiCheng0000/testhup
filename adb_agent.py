@@ -2,25 +2,127 @@
 # -*- coding: utf-8 -*-
 """
 TestHub ADB Agent - 远程设备代理
+========
 
-功能：
-1. 连接 TestHub 服务器 WebSocket
-2. 发现本地 ADB 设备 (USB + 模拟器)
-3. 为 USB 设备启用 TCP 调试模式 (adb tcpip 5555)
-4. 定期同步设备列表到服务器
-5. 处理服务器命令 (截图, UI层级, 等)
+功能概述
+--------
+1. 连接 TestHub 服务器 WebSocket，注册为远程代理节点
+2. 自动发现本地 ADB 设备（USB + 模拟器）
+3. 为 USB 设备自动启用 TCP 调试模式 (adb tcpip 5555)
+4. 定期同步设备列表到服务器（管理员可在平台查看/选择远程设备）
+5. 处理服务器实时命令（截图、UI层级、远程测试执行）
 
-使用方式:
-  python adb_agent.py --server ws://192.168.1.100:8000 [--host-id mypc]
+两种执行策略
+------------
 
-参数:
+方案A - TCP 直连（默认优先）:
+  主服务器通过设备 IP:5555 直接连接 Airtest，Agent 仅负责设备发现和 TCP 端口启用。
+  Agent 不需要安装 airtest，只需 ADB + websockets。
+
+方案B - Agent 远程执行:
+  主服务器通过 WebSocket 发送测试配置（UI Flow 步骤、变量等），Agent 在远程主机上
+  使用本地安装的 airtest 执行测试，流式回传进度和结果（Allure 报告）。
+  Agent 必须安装 airtest。
+
+  数据流:
+    主服务器 ──WebSocket──▶ Agent 主机 ──ADB/USB/tcp──▶ 物理设备
+                  ▲                                   │
+                  │  test_progress (实时进度)          │
+                  │  command_result (结果 + Allure zip) │
+                  └───────────────────────────────────┘
+
+依赖安装
+--------
+  Agent 主机需安装以下依赖：
+
+  方案A（仅 TCP 直连）:
+    pip install websockets
+
+  方案B（远程执行，完整安装）:
+    pip install -r requirements-agent.txt
+
+  系统要求:
+    - Python 3.8+
+    - Android SDK Platform Tools (adb)
+    - 设备已开启 USB 调试
+
+部署步骤
+--------
+1. 在 Agent 主机上安装 Python 依赖:
+     pip install -r requirements-agent.txt
+
+2. 确保 ADB 可用:
+     # 检查 adb 是否在 PATH 中
+     adb devices
+     # 如果不在，使用 --adb 参数指定路径
+
+3. 确保设备通过 USB 连接并授权调试:
+     adb devices               # 应显示 device 状态
+     adb tcpip 5555            # 手动启用 TCP 调试（可选，Agent 会自动启用）
+
+4. 启动 Agent，连接到 TestHub 服务器:
+     python adb_agent.py --server ws://192.168.1.100:8000/ws/app_automation/agent/
+
+5. 验证:
+     - 查看 Agent 控制台日志，确认 "注册成功"
+     - 在 TestHub 平台 → 设备管理，确认 Agent 设备已出现
+     - 设备 ID 格式为: agent:<host_id>:<local_device_id>
+
+6. 在 TestHub 平台选择 Agent 设备执行测试，系统会自动选择最佳策略
+
+命令行参数
+----------
+  python adb_agent.py --server ws://192.168.1.100:8000/ws/app_automation/agent/ [options]
+
   --server     TestHub 服务器 WebSocket 地址 (必需)
-  --host-id    主机 ID（可选，不指定则自动生成）
-  --adb        ADB 可执行文件路径 (默认: adb)
+               格式: ws://服务器IP:端口/ws/app_automation/agent/
+
+  --host-id    主机标识 ID（可选，不指定则自动生成 hostname-随机串）
+               建议为每台 Agent 主机指定一个有意义的名称，如:
+                 --host-id lab-pc-01
+                 --host-id office-android-02
+
+  --adb        ADB 可执行文件路径 (默认: adb，即使用 PATH 中的 adb)
+               如 adb 不在 PATH 中: --adb "C:/platform-tools/adb.exe"
+
   --tcp-port   设备 TCP 调试端口 (默认: 5555)
+               启用后远程设备可通过 主机IP:5555 连接
+
   --interval   设备同步间隔秒数 (默认: 30)
+
   --heartbeat  心跳间隔秒数 (默认: 15)
+
   --log-level  日志级别 (默认: INFO)
+               可选: DEBUG, INFO, WARNING, ERROR
+
+执行策略控制
+------------
+  在 TestHub 主服务器 settings.py 中配置:
+    AGENT_EXECUTION_STRATEGY = 'auto'        # 默认：自动选择（TCP优先→Agent远程备选）
+    AGENT_EXECUTION_STRATEGY = 'direct_tcp'  # 强制方案A：必须通过 TCP 直连
+    AGENT_EXECUTION_STRATEGY = 'agent_remote' # 强制方案B：必须通过 Agent 远程执行
+
+故障排查
+--------
+1. Agent 无法连接服务器:
+   - 检查服务器 WebSocket 地址是否正确（含 /ws/app_automation/agent/ 路径）
+   - 检查网络防火墙是否放行对应端口
+   - 在 Agent 主机上 ping 服务器 IP
+
+2. 设备未出现在平台:
+   - 执行 adb devices 确认设备已连接
+   - 检查 adb tcpip 5555 是否成功（部分设备需要 root 权限）
+   - 查看 Agent 日志: --log-level DEBUG
+
+3. 方案A TCP直连失败:
+   - 确认设备和 Agent 主机在同一网络
+   - 检查设备 TCP 端口是否开放: telnet 设备IP 5555
+   - 确保主服务器能 ping 通设备 IP
+
+4. 方案B Agent远程执行失败:
+   - 确认 Agent 已安装 airtest: pip show airtest
+   - 确认设备未被其他 airtest 进程占用
+   - 查看 Agent 控制台日志中的 "[远程测试]" 标记的日志
 """
 
 import asyncio
@@ -534,10 +636,13 @@ class ADBAgent:
                 result = await self._cmd_screenshot(device_id)
             elif command_type == 'dump_hierarchy':
                 result = await self._cmd_dump_hierarchy(device_id, msg)
+            elif command_type == 'run_test':
+                result = await self._cmd_run_test(msg)
             else:
                 result = {'success': False, 'message': f'不支持的命令: {command_type}'}
         except Exception as e:
-            result = {'success': False, 'message': str(e)}
+            logger.error(f"命令执行失败: {type(e).__name__}: {e}", exc_info=True)
+            result = {'success': False, 'message': f"{type(e).__name__}: {e}"}
         
         result['request_id'] = request_id
         result['type'] = 'command_result'
@@ -666,9 +771,481 @@ class ADBAgent:
             }
         }
     
+    async def _cmd_run_test(self, msg: dict) -> dict:
+        """
+        处理远程测试执行命令（方案B: Agent 远程执行）
+        
+        接收服务器发来的测试用例配置，在 Agent 本地使用 airtest 执行测试，
+        生成 Allure 兼容结果，打包回传。
+        
+        Server → Agent 消息格式:
+        {
+            "type": "exec_command",
+            "command_type": "run_test",
+            "request_id": "...",
+            "device_id": "emulator-5554",
+            "test_case": { "id": 1, "name": "...", "ui_flow": [...], "variables": [...],
+                          "app_package": "...", "timeout": 300 },
+            "package_name": "com.example.app",
+            "execution_id": 42,
+            "username": "admin",
+            "server_base_url": "http://192.168.1.100:8000"
+        }
+        """
+        import os as _os
+        import io as _io
+        import zipfile as _zipfile
+        import tempfile as _tempfile
+        import shutil as _shutil
+        
+        device_id = msg.get('device_id', '')
+        test_case_config = msg.get('test_case', {})
+        package_name = msg.get('package_name', '')
+        execution_id = msg.get('execution_id')
+        username = msg.get('username', 'unknown')
+        server_base_url = msg.get('server_base_url', '')
+        
+        test_case_name = test_case_config.get('name', 'Unknown Test')
+        ui_flow = test_case_config.get('ui_flow', [])
+        variables = test_case_config.get('variables', [])
+        
+        logger.info(
+            f"[远程测试] 开始执行: {test_case_name}, device={device_id}, "
+            f"execution_id={execution_id}"
+        )
+        
+        total_steps = len(ui_flow) if isinstance(ui_flow, list) else 0
+        if isinstance(ui_flow, dict):
+            steps = ui_flow.get('steps', [])
+        else:
+            steps = ui_flow
+        
+        passed = 0
+        failed = 0
+        broken = 0
+        
+        temp_dir = _tempfile.mkdtemp(prefix='agent_allure_')
+        allure_results_dir = _os.path.join(temp_dir, 'allure-results')
+        screenshots_dir = _os.path.join(temp_dir, 'screenshots')
+        _os.makedirs(allure_results_dir, exist_ok=True)
+        _os.makedirs(screenshots_dir, exist_ok=True)
+        
+        test_start_time = time.time()
+        
+        try:
+            # ---- 连接设备 ----
+            await self._send_progress(execution_id, 10, '正在连接设备...')
+            
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None, self._sync_connect_device, device_id
+                )
+                logger.info(f"[远程测试] 设备连接成功: {device_id}")
+            except Exception as e:
+                return {
+                    'success': False,
+                    'message': f'Agent 无法连接设备 {device_id}: {e}'
+                }
+            
+            # ---- 启动应用 ----
+            if package_name:
+                await self._send_progress(execution_id, 15, f'正在启动应用: {package_name}')
+                try:
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, self._sync_start_app, package_name)
+                    await asyncio.sleep(2)
+                except Exception as e:
+                    return {
+                        'success': False,
+                        'message': f'Agent 无法启动应用 {package_name}: {e}'
+                    }
+            else:
+                await self._send_progress(execution_id, 15, '跳过应用启动（未配置包名）')
+            
+            # ---- 执行 UI Flow 步骤 ----
+            if not steps:
+                await self._send_progress(execution_id, 90, '没有可执行的步骤')
+                _write_allure_result(allure_results_dir, test_case_name, 'skipped', test_start_time)
+                return {
+                    'success': True,
+                    'data': {
+                        'test_results': {'total': 0, 'passed': 0, 'failed': 0, 'broken': 0},
+                        'allure_results_zip': '',
+                    }
+                }
+            
+            total_steps = len(steps)
+            
+            for idx, step in enumerate(steps):
+                step_name = step.get('name', f'Step {idx + 1}')
+                
+                step_progress = 15 + int((idx / total_steps) * 75)
+                await self._send_progress(
+                    execution_id, step_progress,
+                    f'步骤 {idx + 1}/{total_steps}: {step_name}'
+                )
+                
+                step_result = await self._agent_execute_step(
+                    step, screenshots_dir, idx
+                )
+                
+                if step_result.get('success'):
+                    passed += 1
+                    _write_allure_step_result(
+                        allure_results_dir, test_case_name,
+                        idx, step_name, 'passed', step_result
+                    )
+                else:
+                    failed += 1
+                    error_msg = step_result.get('error', 'Unknown error')
+                    logger.warning(f"[远程测试] 步骤失败: {step_name}: {error_msg}")
+                    _write_allure_step_result(
+                        allure_results_dir, test_case_name,
+                        idx, step_name, 'failed', step_result
+                    )
+                    await self._send_progress(
+                        execution_id, step_progress,
+                        f'步骤 {idx + 1}/{total_steps}: {step_name} - 失败, 停止执行'
+                    )
+                    break
+            
+            # ---- 完成 ----
+            await self._send_progress(execution_id, 95, '测试执行完成, 打包结果...')
+            
+            overall_status = 'passed' if failed == 0 else 'failed'
+            _write_allure_result(allure_results_dir, test_case_name, overall_status,
+                                test_start_time, passed=passed, failed=failed, broken=broken)
+            
+            duration = time.time() - test_start_time
+            
+            # 打包 Allure 结果
+            allure_zip_b64 = _pack_allure_results(allure_results_dir)
+            
+            logger.info(
+                f"[远程测试] 完成: {test_case_name}, passed={passed}, "
+                f"failed={failed}, duration={duration:.1f}s"
+            )
+            
+            return {
+                'success': True,
+                'data': {
+                    'test_results': {
+                        'total': passed + failed,
+                        'passed': passed,
+                        'failed': failed,
+                        'broken': broken,
+                    },
+                    'duration': round(duration, 1),
+                    'allure_results_zip': allure_zip_b64,
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"[远程测试] 异常: {type(e).__name__}: {e}", exc_info=True)
+            _write_allure_result(allure_results_dir, test_case_name, 'broken', test_start_time,
+                                broken=1, error_message=str(e))
+            return {
+                'success': False,
+                'message': f'Agent 测试执行异常: {type(e).__name__}: {e}',
+            }
+        finally:
+            try:
+                _shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception:
+                pass
+            try:
+                self._agent_disconnect_device()
+            except Exception:
+                pass
+    
+    async def _send_progress(self, execution_id, progress, message):
+        """发送测试进度更新到服务器"""
+        try:
+            await self._send({
+                'type': 'test_progress',
+                'execution_id': execution_id,
+                'progress': progress,
+                'current_step': message,
+                'status': 'running',
+            })
+        except Exception as e:
+            logger.debug(f"发送进度消息失败: {e}")
+    
+    def _sync_connect_device(self, device_id: str):
+        """同步方法：使用 airtest 连接设备"""
+        from airtest.core.api import init_device
+        logger.info(f"[远程测试] Airtest 连接设备: {device_id}")
+        init_device(platform='Android', uuid=device_id, cap_method='ADBCAP')
+    
+    def _sync_start_app(self, package_name: str):
+        """同步方法：启动应用"""
+        from airtest.core.api import start_app
+        start_app(package_name)
+    
+    async def _agent_execute_step(self, step: dict, screenshots_dir: str, idx: int) -> dict:
+        """执行单个 UI Flow 步骤（在线程池中运行）"""
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, self._sync_execute_step, step, screenshots_dir, idx
+        )
+        return result
+    
+    def _sync_execute_step(self, step: dict, screenshots_dir: str, idx: int) -> dict:
+        """同步方法：执行单个 UI Flow 步骤"""
+        import os as _os
+        from airtest.core.api import (
+            touch, swipe, text, wait, exists,
+            Template, snapshot, sleep,
+        )
+        
+        action = (step.get('action', '') or '').lower()
+        element = step.get('element', {})
+        element_type = element.get('type', '')
+        element_config = element.get('config', {})
+        
+        result = {'success': False, 'error': '', 'screenshots': []}
+        
+        # 截图（执行前）
+        before_ss = _os.path.join(screenshots_dir, f'step_{idx}_before.png')
+        try:
+            snapshot(filename=before_ss, quality=50)
+            result['screenshots'].append(before_ss)
+        except Exception:
+            pass
+        
+        # 定位目标
+        target = None
+        pos = None
+        
+        if element_type == 'pos':
+            pos = (element_config.get('x', 0), element_config.get('y', 0))
+        elif element_type == 'image':
+            image_path = element_config.get('image_path', '')
+            threshold = element_config.get('image_threshold', 0.7)
+            if image_path and _os.path.exists(image_path):
+                target = Template(image_path, threshold=threshold, rgb=False)
+            else:
+                result['error'] = f'图片文件不存在: {image_path}'
+                return result
+        elif element_type in ('uiautomator', 'region'):
+            bounds = element_config.get('bounds', [])
+            if bounds and len(bounds) == 4:
+                pos = ((bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2)
+            elif element_type == 'region':
+                pos = (
+                    (element_config.get('x1', 0) + element_config.get('x2', 0)) // 2,
+                    (element_config.get('y1', 0) + element_config.get('y2', 0)) // 2
+                )
+            else:
+                result['error'] = 'UI元素无法定位（缺少 bounds）'
+                return result
+        
+        # 执行操作
+        try:
+            if action in ('click', 'tap'):
+                if target:
+                    touch(target)
+                elif pos:
+                    touch(pos)
+                else:
+                    result['error'] = '无可点击的目标'
+                    return result
+
+            elif action == 'swipe':
+                start = (element_config.get('start_x', 0), element_config.get('start_y', 0))
+                end = (element_config.get('end_x', 0), element_config.get('end_y', 0))
+                swipe(start, end)
+
+            elif action in ('input', 'text'):
+                txt = element_config.get('text', step.get('value', ''))
+                if target:
+                    touch(target)
+                    sleep(0.5)
+                if pos:
+                    touch(pos)
+                    sleep(0.5)
+                text(txt)
+
+            elif action == 'wait':
+                wt = float(element_config.get('seconds', step.get('value', 1)))
+                sleep(wt)
+
+            elif action == 'assert_exists':
+                if target and not exists(target):
+                    result['error'] = f'元素不存在: {element.get("name", "unknown")}'
+                    return result
+
+            elif action == 'assert_not_exists':
+                if target and exists(target):
+                    result['error'] = f'元素仍存在: {element.get("name", "unknown")}'
+                    return result
+
+            elif action == 'back':
+                from airtest.core.api import keyevent
+                keyevent('BACK')
+
+            elif action == 'home':
+                from airtest.core.api import keyevent
+                keyevent('HOME')
+
+            elif action == 'app_start':
+                pkg = element_config.get('package_name', step.get('value', ''))
+                if pkg:
+                    from airtest.core.api import start_app
+                    start_app(pkg)
+
+            elif action == 'app_stop':
+                pkg = element_config.get('package_name', step.get('value', ''))
+                if pkg:
+                    from airtest.core.api import stop_app
+                    stop_app(pkg)
+
+            else:
+                logger.warning(f"[远程测试] 未知操作: {action}")
+
+            sleep(0.5)
+            after_ss = _os.path.join(screenshots_dir, f'step_{idx}_after.png')
+            try:
+                snapshot(filename=after_ss, quality=50)
+                result['screenshots'].append(after_ss)
+            except Exception:
+                pass
+
+            result['success'] = True
+
+        except Exception as e:
+            result['success'] = False
+            result['error'] = f"{type(e).__name__}: {e}"
+            logger.error(f"[远程测试] 步骤执行失败: {action}: {e}")
+
+        return result
+    
+    def _agent_disconnect_device(self):
+        """断开设备连接"""
+        try:
+            from airtest.core.api import G
+            if hasattr(G, 'DEVICE') and G.DEVICE:
+                try:
+                    G.DEVICE.disconnect()
+                except Exception:
+                    pass
+            if hasattr(G, 'DEVICE_LIST'):
+                G.DEVICE_LIST.clear()
+        except Exception:
+            pass
+    
     def stop(self):
         """停止 Agent"""
         self._running = False
+
+
+# ---- Allure 结果生成（Agent 端）----
+
+def _write_allure_result(results_dir: str, name: str, status: str, start_time: float,
+                         passed: int = 0, failed: int = 0, broken: int = 0,
+                         error_message: str = ''):
+    """写入 Allure 主结果 JSON"""
+    import json as _json
+    import os as _os
+    
+    duration = int((time.time() - start_time) * 1000)  # 毫秒
+    result = {
+        "name": name,
+        "status": status,
+        "start": int(start_time * 1000),
+        "stop": int(time.time() * 1000),
+        "uuid": str(uuid.uuid4()),
+        "historyId": str(uuid.uuid4()),
+        "testCaseId": str(uuid.uuid4()),
+        "fullName": f"Agent Remote Test: {name}",
+        "labels": [
+            {"name": "host", "value": socket.gethostname()},
+            {"name": "thread", "value": str(os.getpid())},
+        ],
+        "parameters": [
+            {"name": "passed", "value": str(passed)},
+            {"name": "failed", "value": str(failed)},
+            {"name": "broken", "value": str(broken)},
+        ],
+    }
+    if error_message:
+        result["statusDetails"] = {"message": error_message, "trace": error_message}
+    
+    filepath = _os.path.join(results_dir, f"{result['uuid']}-result.json")
+    with open(filepath, 'w', encoding='utf-8') as f:
+        _json.dump(result, f, ensure_ascii=False, indent=2)
+
+
+def _write_allure_step_result(results_dir: str, test_name: str, idx: int,
+                               step_name: str, status: str, step_result: dict):
+    """写入 Allure 步骤结果 JSON（作为子步骤）"""
+    import json as _json
+    import os as _os
+    
+    result = {
+        "name": f"[Step {idx + 1}] {step_name}",
+        "status": status,
+        "start": int(time.time() * 1000) - 1000,
+        "stop": int(time.time() * 1000),
+        "uuid": str(uuid.uuid4()),
+        "historyId": str(uuid.uuid4()),
+        "testCaseId": str(uuid.uuid4()),
+        "fullName": f"Agent Remote Test Step: {step_name}",
+        "labels": [
+            {"name": "parentSuite", "value": test_name},
+            {"name": "feature", "value": "Agent远程测试"},
+        ],
+        "steps": [],
+        "attachments": [],
+    }
+    
+    if status == 'failed':
+        error_msg = step_result.get('error', 'Unknown error')
+        result["statusDetails"] = {"message": error_msg, "trace": error_msg}
+    
+    # 添加截图附件
+    for ss_path in step_result.get('screenshots', []):
+        if _os.path.exists(ss_path):
+            try:
+                with open(ss_path, 'rb') as f:
+                    ss_b64 = base64.b64encode(f.read()).decode('utf-8')
+                result["attachments"].append({
+                    "name": _os.path.basename(ss_path),
+                    "source": ss_b64,
+                    "type": "image/png",
+                })
+            except Exception:
+                pass
+    
+    filepath = _os.path.join(results_dir, f"{result['uuid']}-result.json")
+    with open(filepath, 'w', encoding='utf-8') as f:
+        _json.dump(result, f, ensure_ascii=False, indent=2)
+
+
+def _pack_allure_results(allure_results_dir: str) -> str:
+    """打包 Allure 结果目录为 base64 zip"""
+    import os as _os
+    import io as _io
+    import zipfile as _zipfile
+    
+    try:
+        result_files = [f for f in _os.listdir(allure_results_dir) if f.endswith('.json')]
+        if not result_files:
+            return ''
+        
+        buf = _io.BytesIO()
+        with _zipfile.ZipFile(buf, 'w', _zipfile.ZIP_DEFLATED) as zf:
+            for fname in result_files:
+                fpath = _os.path.join(allure_results_dir, fname)
+                zf.write(fpath, fname)
+        
+        b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        logger.info(f"[远程测试] Allure 打包: {len(result_files)} 文件, {len(b64)} chars base64")
+        return b64
+    except Exception as e:
+        logger.error(f"[远程测试] 打包 Allure 失败: {e}")
+        return ''
 
 
 # ---- 主入口 ----

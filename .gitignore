@@ -17,7 +17,8 @@ logs/*/*
 # 忽略.env配置文件(但保留.env.example示例文件)
 .env
 .sql
-static_files/img/
+# collectstatic 输出目录，部署时通过 manage.py collectstatic 生成，不入库
+static_files/
 .bak
 # 忽略所有 app/*/migrations/ 目录下的所有内容 (包括文件和子目录)
 apps/*/migrations/*

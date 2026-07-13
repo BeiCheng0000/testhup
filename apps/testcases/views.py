@@ -14,7 +14,7 @@ from .serializers import (
     BatchDeleteSerializer, BatchUpdateSerializer
 )
 from apps.projects.models import Project
-from apps.projects.helpers import get_user_accessible_projects
+from apps.projects.helpers import get_user_accessible_projects, get_user_owned_projects
 from apps.versions.models import Version
 from .services import TestCaseImportTemplateService, TestCaseExcelImportService
 from .tasks import import_testcases_from_excel
@@ -129,6 +129,12 @@ class TestCaseDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_user_accessible_projects(self, user):
         """获取用户有权限访问的项目"""
         return get_user_accessible_projects(user)
+
+    def perform_destroy(self, instance):
+        """只有项目负责人才能删除用例"""
+        if instance.project.owner != self.request.user:
+            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除用例'})
+        instance.delete()
     
     def perform_update(self, serializer):
         user = self.request.user
@@ -304,7 +310,7 @@ class TestCaseModuleStatsView(APIView):
 
 
 class TestCaseBatchDeleteView(APIView):
-    """批量删除测试用例"""
+    """批量删除测试用例（只有项目负责人才能删除）"""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -313,12 +319,12 @@ class TestCaseBatchDeleteView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         ids = serializer.validated_data['ids']
-        accessible_projects = get_user_accessible_projects(request.user)
+        # 只删除用户负责的项目下的用例
+        owned_projects = get_user_owned_projects(request.user)
 
-        # 只删除用户有权限访问的项目下的用例
         testcases = TestCase.objects.filter(
             id__in=ids,
-            project__in=accessible_projects
+            project__in=owned_projects
         )
 
         deleted_count = testcases.count()

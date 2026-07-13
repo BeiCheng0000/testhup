@@ -40,6 +40,12 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_destroy(self, instance):
+        """只有项目负责人才能删除项目"""
+        if instance.owner != self.request.user:
+            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除项目'})
+        instance.delete()
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def add_project_member(request, project_id):
