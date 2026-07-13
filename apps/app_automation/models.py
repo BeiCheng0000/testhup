@@ -2,13 +2,14 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from apps.projects.models import SoftDeleteModel
 
 from .constants import DeviceStatus, ExecutionStatus, ExecutionResult, ElementType
 
 User = get_user_model()
 
 
-class AppProject(models.Model):
+class AppProject(SoftDeleteModel):
     """APP自动化测试项目"""
     STATUS_CHOICES = [
         ('NOT_STARTED', '未开始'),

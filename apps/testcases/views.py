@@ -134,6 +134,9 @@ class TestCaseDetailView(generics.RetrieveUpdateDestroyAPIView):
         """只有项目负责人才能删除用例"""
         if instance.project.owner != self.request.user:
             raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除用例'})
+        # 检查项目是否已被软删除
+        if instance.project.is_deleted:
+            raise permissions.exceptions.PermissionDenied({'error': '项目已被删除，无法操作用例'})
         instance.delete()
     
     def perform_update(self, serializer):

@@ -33,6 +33,7 @@ export default {
   project: projectModule.project,
   home: projectModule.home,
   profile: projectModule.profile,
+  recycleBin: projectModule.recycleBin,
 
   // 测试用例模块
   testcase: testcaseModule.testcase,

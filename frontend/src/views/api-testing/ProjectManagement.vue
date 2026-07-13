@@ -2,10 +2,13 @@
   <div class="project-management">
     <div class="header">
       <h2>{{ $t('apiTesting.project.title') }}</h2>
-      <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>
-        {{ $t('apiTesting.project.createProject') }}
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="showRecycleBin = true">{{ $t('recycleBin.title') }}</el-button>
+        <el-button type="primary" @click="showCreateDialog = true">
+          <el-icon><Plus /></el-icon>
+          {{ $t('apiTesting.project.createProject') }}
+        </el-button>
+      </div>
     </div>
 
 
@@ -55,6 +58,15 @@
       @size-change="handleSizeChange"
       @current-change="handleCurrentChange"
       class="pagination"
+    />
+
+    <!-- 回收站对话框 -->
+    <RecycleBin
+      v-model:visible="showRecycleBin"
+      :api="api"
+      restore-url="/api-testing/projects/"
+      deleted-url="/api-testing/projects/deleted/"
+      @restored="loadProjects"
     />
 
     <!-- 新建/编辑项目对话框 -->
@@ -205,6 +217,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, ElDescriptions, ElDescriptionsItem } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
+import RecycleBin from '@/components/RecycleBin.vue'
 import api from '@/utils/api'
 import dayjs from 'dayjs'
 
@@ -215,6 +228,7 @@ const users = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const showRecycleBin = ref(false)
 const showCreateDialog = ref(false)
 const showViewDialog = ref(false)
 const editingProject = ref(null)
@@ -330,24 +344,28 @@ const viewProject = (project) => {
 
 const deleteProject = async (project) => {
   try {
-    await ElMessageBox.confirm(
-      t('apiTesting.project.confirmDelete', { name: project.name }),
-      t('apiTesting.messages.confirm.deleteTitle'),
+    const { value } = await ElMessageBox.prompt(
+      t('project.deletePrompt', { name: project.name }),
+      t('project.deleteTitle'),
       {
         confirmButtonText: t('apiTesting.common.confirm'),
         cancelButtonText: t('apiTesting.common.cancel'),
-        type: 'warning'
+        type: 'warning',
+        inputPlaceholder: t('project.deleteInputPlaceholder'),
+        inputValidator: (val) => {
+          if (!val) return t('project.deleteNameMismatch')
+          return val === project.name ? true : t('project.deleteNameMismatch')
+        },
       }
     )
-
-    await api.delete(`/api-testing/projects/${project.id}/`)
-    ElMessage.success(t('apiTesting.messages.success.delete'))
-    await loadProjects()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error(t('apiTesting.messages.error.deleteFailed'))
-      console.error(error)
+    if (value === project.name) {
+      await api.delete(`/api-testing/projects/${project.id}/`)
+      ElMessage.success(t('apiTesting.messages.success.delete'))
+      await loadProjects()
     }
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(t('apiTesting.messages.error.deleteFailed'))
   }
 }
 
@@ -415,6 +433,11 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .header h2 {

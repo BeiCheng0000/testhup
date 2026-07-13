@@ -4,7 +4,10 @@ from . import views, project_list_views
 urlpatterns = [
     path('', views.ProjectListCreateView.as_view(), name='project-list'),
     path('all/', views.get_all_projects, name='all-projects'),
+    path('deleted/', views.deleted_projects_list, name='deleted-projects'),
     path('<int:pk>/', views.ProjectDetailView.as_view(), name='project-detail'),
+    path('<int:pk>/restore/', views.restore_project, name='restore-project'),
+    path('<int:pk>/hard-delete/', views.hard_delete_project, name='hard-delete-project'),
     path('<int:project_id>/members/', views.get_project_members, name='get-project-members'),
     path('<int:project_id>/members/add/', views.add_project_member, name='add-member'),
     path('<int:project_id>/members/<int:member_id>/', views.project_member_detail, name='member-detail'),

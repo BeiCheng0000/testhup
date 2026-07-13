@@ -40,8 +40,13 @@ export default {
     updateFailed: '项目更新失败',
     createFailed: '项目创建失败',
     deleteConfirm: '确定要删除这个项目吗？',
+    deleteTitle: '删除项目',
+    deletePrompt: '请输入项目名称「{name}」确认删除：',
+    deleteInputPlaceholder: '请输入项目名称以确认',
+    deleteNameMismatch: '项目名称不匹配',
     deleteSuccess: '项目删除成功',
     deleteFailed: '项目删除失败',
+    deleteCancel: '已取消删除',
 
     // Detail page
     projectDetail: '项目详情',
@@ -64,6 +69,22 @@ export default {
     fetchDetailFailed: '获取项目详情失败',
     memberDeleteSuccess: '成员删除成功',
     memberDeleteFailed: '删除成员失败'
+  },
+  recycleBin: {
+    title: '回收站',
+    projectName: '项目名称',
+    deletedAt: '删除时间',
+    actions: '操作',
+    restore: '恢复',
+    permanentlyDelete: '彻底删除',
+    restoreConfirm: '确定要恢复项目「{name}」吗？',
+    restoreTitle: '恢复确认',
+    restoreSuccess: '项目已恢复',
+    hardDeletePrompt: '请输入项目名称「{name}」以确认彻底删除（不可恢复）：',
+    hardDeleteTitle: '彻底删除确认',
+    hardDeleteSuccess: '项目已彻底删除',
+    nameMismatch: '项目名称与输入不一致',
+    empty: '回收站为空'
   },
   home: {
     // Header

@@ -40,8 +40,13 @@ export default {
     updateFailed: 'Failed to update project',
     createFailed: 'Failed to create project',
     deleteConfirm: 'Are you sure to delete this project?',
+    deleteTitle: 'Delete Project',
+    deletePrompt: 'Enter project name "{name}" to confirm deletion:',
+    deleteInputPlaceholder: 'Enter project name to confirm',
+    deleteNameMismatch: 'Project name does not match',
     deleteSuccess: 'Project deleted successfully',
     deleteFailed: 'Failed to delete project',
+    deleteCancel: 'Deletion cancelled',
 
     // Detail page
     projectDetail: 'Project Details',
@@ -64,6 +69,22 @@ export default {
     fetchDetailFailed: 'Failed to fetch project details',
     memberDeleteSuccess: 'Member deleted successfully',
     memberDeleteFailed: 'Failed to delete member'
+  },
+  recycleBin: {
+    title: 'Recycle Bin',
+    projectName: 'Project Name',
+    deletedAt: 'Deleted At',
+    actions: 'Actions',
+    restore: 'Restore',
+    permanentlyDelete: 'Permanently Delete',
+    restoreConfirm: 'Are you sure to restore "{name}"?',
+    restoreTitle: 'Restore Confirmation',
+    restoreSuccess: 'Project restored',
+    hardDeletePrompt: 'Enter project name "{name}" to permanently delete (irreversible):',
+    hardDeleteTitle: 'Permanent Delete Confirmation',
+    hardDeleteSuccess: 'Project permanently deleted',
+    nameMismatch: 'Project name does not match',
+    empty: 'Recycle Bin is empty'
   },
   home: {
     // Header

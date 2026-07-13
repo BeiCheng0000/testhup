@@ -1,12 +1,13 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from apps.projects.models import SoftDeleteModel
 import json
 
 User = get_user_model()
 
 
-class UiProject(models.Model):
+class UiProject(SoftDeleteModel):
     """UI自动化测试项目模型"""
     STATUS_CHOICES = [
         ('NOT_STARTED', '未开始'),

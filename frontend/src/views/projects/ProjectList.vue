@@ -2,10 +2,16 @@
   <div class="page-container">
     <div class="page-header">
       <h1 class="page-title">{{ $t('project.projectManagement') }}</h1>
-      <el-button type="primary" @click="handleCreateProject">
-        <el-icon><Plus /></el-icon>
-        {{ $t('project.newProject') }}
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="showRecycleBin = true">
+          <el-icon><Delete /></el-icon>
+          {{ $t('recycleBin.title') }}
+        </el-button>
+        <el-button type="primary" @click="handleCreateProject">
+          <el-icon><Plus /></el-icon>
+          {{ $t('project.newProject') }}
+        </el-button>
+      </div>
     </div>
 
     <div class="card-container">
@@ -73,6 +79,15 @@
       </div>
     </div>
     
+    <!-- 回收站对话框 -->
+    <RecycleBin
+      v-model:visible="showRecycleBin"
+      :api="api"
+      restore-url="/projects/"
+      deleted-url="/projects/deleted/"
+      @restored="fetchProjects"
+    />
+
     <!-- 创建/编辑项目对话框 -->
     <el-dialog
       :title="isEdit ? $t('project.editProject') : $t('project.createProject')"
@@ -121,6 +136,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import RecycleBin from '@/components/RecycleBin.vue'
 import api from '@/utils/api'
 import dayjs from 'dayjs'
 
@@ -129,6 +145,7 @@ const { t } = useI18n()
 const loading = ref(false)
 const submitting = ref(false)
 const showCreateDialog = ref(false)
+const showRecycleBin = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 
@@ -250,19 +267,29 @@ const handleSubmit = async () => {
 
 const deleteProject = async (project) => {
   try {
-    await ElMessageBox.confirm(t('project.deleteConfirm'), t('common.warning'), {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning'
-    })
+    const { value } = await ElMessageBox.prompt(
+      t('project.deletePrompt', { name: project.name }),
+      t('project.deleteTitle'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning',
+        inputPlaceholder: t('project.deleteInputPlaceholder'),
+        inputValidator: (val) => {
+          if (!val) return t('project.deleteNameMismatch')
+          return val === project.name ? true : t('project.deleteNameMismatch')
+        },
+      }
+    )
 
-    await api.delete(`/projects/${project.id}/`)
-    ElMessage.success(t('project.deleteSuccess'))
-    fetchProjects()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error(t('project.deleteFailed'))
+    if (value === project.name) {
+      await api.delete(`/projects/${project.id}/`)
+      ElMessage.success(t('project.deleteSuccess'))
+      fetchProjects()
     }
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(t('project.deleteFailed'))
   }
 }
 
@@ -296,6 +323,11 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .filter-bar {
   margin-bottom: 20px;
 }

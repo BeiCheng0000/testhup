@@ -41,10 +41,53 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_destroy(self, instance):
-        """只有项目负责人才能删除项目"""
+        """软删除：只有项目负责人才能删除"""
         if instance.owner != self.request.user:
             raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除项目'})
-        instance.delete()
+        instance.soft_delete()
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def restore_project(request, pk):
+    """恢复已删除的项目（只有负责人可恢复）"""
+    try:
+        project = Project.all_objects.get(id=pk)
+        if project.owner != request.user:
+            return Response({'error': '只有项目负责人才能恢复项目'}, status=status.HTTP_403_FORBIDDEN)
+        if not project.is_deleted:
+            return Response({'error': '项目未被删除，无需恢复'}, status=status.HTTP_400_BAD_REQUEST)
+        project.restore()
+        return Response({'message': '项目已恢复'})
+    except Project.DoesNotExist:
+        return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def hard_delete_project(request, pk):
+    """彻底删除项目（物理删除，只有负责人可操作）"""
+    try:
+        project = Project.all_objects.get(id=pk)
+        if project.owner != request.user:
+            return Response({'error': '只有项目负责人才能彻底删除项目'}, status=status.HTTP_403_FORBIDDEN)
+        project.hard_delete()
+        return Response({'message': '项目已彻底删除，无法恢复'})
+    except Project.DoesNotExist:
+        return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def deleted_projects_list(request):
+    """获取当前用户的已删除项目列表（回收站）"""
+    user = request.user
+    deleted_projects = Project.all_objects.filter(
+        is_deleted=True,
+        owner=user
+    ).order_by('-deleted_at')
+    serializer = ProjectSerializer(deleted_projects, many=True)
+    return Response(serializer.data)
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])

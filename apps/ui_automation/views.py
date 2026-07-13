@@ -156,13 +156,48 @@ class UiProjectViewSet(viewsets.ModelViewSet):
         log_operation('edit', 'project', instance.id, instance.name, self.request.user)
 
     def perform_destroy(self, instance):
-        # 只有项目负责人才能删除项目
+        """软删除项目（只有项目负责人才能删除）"""
         if instance.owner != self.request.user:
             from rest_framework import permissions
             raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除项目'})
-        # 记录操作（在删除前记录）
         log_operation('delete', 'project', instance.id, instance.name, self.request.user)
-        instance.delete()
+        instance.soft_delete()
+
+    @action(detail=True, methods=['post'], url_path='restore')
+    def restore(self, request, pk=None):
+        """恢复已删除的项目"""
+        try:
+            instance = UiProject.all_objects.get(pk=pk)
+            if instance.owner != request.user:
+                return Response({'error': '只有项目负责人才能恢复项目'}, status=status.HTTP_403_FORBIDDEN)
+            if not instance.is_deleted:
+                return Response({'error': '项目未被删除，无需恢复'}, status=status.HTTP_400_BAD_REQUEST)
+            instance.restore()
+            return Response({'message': '项目已恢复'})
+        except UiProject.DoesNotExist:
+            return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='hard-delete')
+    def hard_delete(self, request, pk=None):
+        """彻底删除项目（物理删除，只有责任人可操作）"""
+        try:
+            instance = UiProject.all_objects.get(pk=pk)
+            if instance.owner != request.user:
+                return Response({'error': '只有项目负责人才能彻底删除项目'}, status=status.HTTP_403_FORBIDDEN)
+            instance.hard_delete()
+            return Response({'message': '项目已彻底删除，无法恢复'})
+        except UiProject.DoesNotExist:
+            return Response({'error': '项目不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'], url_path='deleted')
+    def deleted_list(self, request):
+        """获取当前用户的已删除项目列表（回收站）"""
+        user = request.user
+        deleted = UiProject.all_objects.filter(
+            is_deleted=True, owner=user
+        ).order_by('-deleted_at')
+        serializer = self.get_serializer(deleted, many=True)
+        return Response(serializer.data)
 
 
 class LocatorStrategyViewSet(viewsets.ModelViewSet):

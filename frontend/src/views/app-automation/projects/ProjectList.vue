@@ -2,9 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <h2 class="page-title">APP项目管理</h2>
-      <el-button type="primary" @click="openCreateDialog">
-        <el-icon><Plus /></el-icon>新建项目
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="showRecycleBin = true">回收站</el-button>
+        <el-button type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>新建项目
+        </el-button>
+      </div>
     </div>
 
     <div class="card-container">
@@ -85,6 +88,15 @@
       </div>
     </div>
 
+    <!-- 回收站对话框 -->
+    <RecycleBin
+      v-model:visible="showRecycleBin"
+      :api="api"
+      restore-url="/app-automation/projects/"
+      deleted-url="/app-automation/projects/deleted/"
+      @restored="loadProjects"
+    />
+
     <!-- 创建/编辑对话框 -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑项目' : '新建项目'" width="520px" :close-on-click-modal="false">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
@@ -144,6 +156,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { getAppProjects, createAppProject, updateAppProject, deleteAppProject } from '@/api/app-automation.js'
+import RecycleBin from '@/components/RecycleBin.vue'
+import api from '@/utils/api'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -153,6 +167,7 @@ const statusFilter = ref('')
 const pagination = reactive({ current: 1, size: 20, total: 0 })
 
 // 对话框
+const showRecycleBin = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const editId = ref(null)
@@ -232,11 +247,26 @@ async function handleSubmit() {
 
 async function handleDelete(row) {
   try {
-    await ElMessageBox.confirm(`确认删除项目「${row.name}」？此操作不可恢复`, '删除确认', { type: 'warning' })
-    await deleteAppProject(row.id)
-    ElMessage.success('已删除')
-    loadProjects()
-  } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
+    const { value } = await ElMessageBox.prompt(
+      `请输入项目名称「${row.name}」以确认删除：`,
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+        inputPlaceholder: '请输入项目名称以确认',
+        inputValidator: (val) => {
+          if (!val) return '项目名称不能为空'
+          return val === row.name ? true : '项目名称与输入不一致'
+        },
+      }
+    )
+    if (value === row.name) {
+      await deleteAppProject(row.id)
+      ElMessage.success('已删除')
+      loadProjects()
+    }
+  } catch (e) { if (e !== 'cancel' && e !== 'close') ElMessage.error('删除失败') }
 }
 
 function viewDetail(row) {
@@ -263,6 +293,7 @@ function formatDateTime(dt) {
 <style scoped>
 .page-container { padding: 20px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.header-actions { display: flex; gap: 12px; }
 .page-title { margin: 0; font-size: 20px; }
 .card-container { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .filter-bar { margin-bottom: 20px; }

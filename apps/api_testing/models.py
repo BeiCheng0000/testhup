@@ -1,12 +1,13 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from apps.projects.models import SoftDeleteModel
 import json
 
 User = get_user_model()
 
 
-class ApiProject(models.Model):
+class ApiProject(SoftDeleteModel):
     """API项目模型"""
     PROJECT_TYPE_CHOICES = [
         ('HTTP', 'HTTP'),

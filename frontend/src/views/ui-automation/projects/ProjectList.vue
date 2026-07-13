@@ -2,10 +2,13 @@
   <div class="page-container">
     <div class="page-header">
       <h1 class="page-title">{{ $t('uiAutomation.project.title') }}</h1>
-      <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>
-        {{ $t('uiAutomation.project.newProject') }}
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="showRecycleBin = true">{{ $t('recycleBin.title') }}</el-button>
+        <el-button type="primary" @click="showCreateDialog = true">
+          <el-icon><Plus /></el-icon>
+          {{ $t('uiAutomation.project.newProject') }}
+        </el-button>
+      </div>
     </div>
     
     <div class="card-container">
@@ -61,7 +64,7 @@
               <el-icon><Edit /></el-icon>
               {{ $t('uiAutomation.common.edit') }}
             </el-button>
-            <el-button size="small" type="danger" @click="deleteProject(row.id)">
+            <el-button size="small" type="danger" @click="deleteProject(row)">
               <el-icon><Delete /></el-icon>
               {{ $t('uiAutomation.common.delete') }}
             </el-button>
@@ -82,6 +85,15 @@
       </div>
     </div>
     
+    <!-- 回收站对话框 -->
+    <RecycleBin
+      v-model:visible="showRecycleBin"
+      :api="api"
+      restore-url="/ui-automation/projects/"
+      deleted-url="/ui-automation/projects/deleted/"
+      @restored="loadProjects"
+    />
+
     <!-- 创建项目对话框 -->
     <el-dialog v-model="showCreateDialog" :title="$t('uiAutomation.project.createProject')" width="500px" :close-on-click-modal="false">
       <el-form ref="createFormRef" :model="createForm" :rules="formRules" label-width="80px">
@@ -213,6 +225,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, View, Edit, Delete } from '@element-plus/icons-vue'
 import { getUiProjects, createUiProject, updateUiProject, deleteUiProject } from '@/api/ui_automation'
 import { useI18n } from 'vue-i18n'
+import RecycleBin from '@/components/RecycleBin.vue'
+import api from '@/utils/api'
 
 const { t } = useI18n()
 
@@ -234,6 +248,7 @@ const urlProtocol = ref('https://')
 const editUrlProtocol = ref('https://')
 
 // 表单相关
+const showRecycleBin = ref(false)
 const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const createFormRef = ref(null)
@@ -406,19 +421,29 @@ const editProject = (project) => {
 }
 
 // 删除项目
-const deleteProject = async (id) => {
+const deleteProject = async (project) => {
   try {
-    await ElMessageBox.confirm(t('uiAutomation.project.messages.deleteConfirm'), t('uiAutomation.messages.confirm.delete'), {
-      confirmButtonText: t('uiAutomation.common.confirm'),
-      cancelButtonText: t('uiAutomation.common.cancel'),
-      type: 'warning'
-    })
-
-    await deleteUiProject(id)
-    ElMessage.success(t('uiAutomation.project.messages.deleteSuccess'))
-    loadProjects()
+    const { value } = await ElMessageBox.prompt(
+      t('project.deletePrompt', { name: project.name }),
+      t('project.deleteTitle'),
+      {
+        confirmButtonText: t('uiAutomation.common.confirm'),
+        cancelButtonText: t('uiAutomation.common.cancel'),
+        type: 'warning',
+        inputPlaceholder: t('project.deleteInputPlaceholder'),
+        inputValidator: (val) => {
+          if (!val) return t('project.deleteNameMismatch')
+          return val === project.name ? true : t('project.deleteNameMismatch')
+        },
+      }
+    )
+    if (value === project.name) {
+      await deleteUiProject(project.id)
+      ElMessage.success(t('uiAutomation.project.messages.deleteSuccess'))
+      loadProjects()
+    }
   } catch (error) {
-    if (error === 'cancel') return
+    if (error === 'cancel' || error === 'close') return
     ElMessage.error(t('uiAutomation.project.messages.deleteFailed'))
     console.error('删除项目失败:', error)
   }
@@ -531,6 +556,11 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .page-title {
