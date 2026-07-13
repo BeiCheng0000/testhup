@@ -41,6 +41,10 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_FILES_URL, document_root=settings.STATIC_FILES_ROOT)
 
+# 静态文件服务：daphne/生产模式下 runserver 的 DEBUG 自动静态服务不可用，
+# 必须显式提供 /static/，否则 admin/simpleui 登录页等静态资源全部 404。
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
 # APP自动化 Template 目录静态访问
 import os
 urlpatterns += [
