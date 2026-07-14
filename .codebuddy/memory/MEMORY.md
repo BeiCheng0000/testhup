@@ -30,3 +30,10 @@
 - daphne 不自带静态文件服务，需要 `collectstatic` 生成到 `static_files/`
 - `static_files/` 整个目录已在 `.gitignore` 中忽略，不入版本库
 - 新环境部署时执行：`python manage.py collectstatic --noinput`
+
+## Nginx 配置注意事项（2026-07-13 更新）
+- 本项目 nginx 配置中存在 `location /` 块内嵌 `location ~* \.(js|css|ico|png|...)$` 用于前端静态资源缓存。正则 location 的匹配优先级高于普通前缀 location，会导致 `/media/.../app.js`、`/static/.../admin.css` 等请求被错误路由到 `frontend/dist/` 而 404。
+- **规则**：所有需要代理/alias 到后端的特殊路径（`/media/`、`/static/`、`/admin/`、`/app-automation-reports/`、`/app-automation-templates/`、`/api-testing-reports/`）必须使用 `^~` 修饰符，例如 `location ^~ /media/ { ... }`，强制优先于正则 location。
+- 已修复位置：`e:\it_install\nginx-1.31.1\conf\testhub.conf`、`frontend\nginx.conf`。
+- 另外，nginx 默认监听端口在 Windows 本地环境中改为 8090，避免与 Java 进程占用的 8080 冲突。
+`

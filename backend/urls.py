@@ -38,12 +38,13 @@ if settings.ANALYTICS_ENABLED:
     urlpatterns.append(path('api/analytics/', include('apps.analytics.urls')))
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_FILES_URL, document_root=settings.STATIC_FILES_ROOT)
 
 # 静态文件服务：daphne/生产模式下 runserver 的 DEBUG 自动静态服务不可用，
 # 必须显式提供 /static/，否则 admin/simpleui 登录页等静态资源全部 404。
+# 媒体文件服务同理，需无条件提供。
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # APP自动化 Template 目录静态访问
 import os
@@ -58,4 +59,11 @@ urlpatterns += [
     path('app-automation-reports/<path:path>', 
          serve, 
          {'document_root': os.path.join(settings.MEDIA_ROOT, 'app-automation', 'allure-reports')}),
+]
+
+# API测试 Allure 报告访问
+urlpatterns += [
+    path('api-testing-reports/<path:path>', 
+         serve, 
+         {'document_root': os.path.join(settings.MEDIA_ROOT, 'api-testing', 'allure-reports')}),
 ]
