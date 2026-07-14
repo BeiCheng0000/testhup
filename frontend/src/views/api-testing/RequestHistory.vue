@@ -168,6 +168,65 @@
               <el-empty :description="$t('apiTesting.history.noResponseData')" />
             </div>
           </el-tab-pane>
+
+          <el-tab-pane
+            v-if="selectedHistory.response_data && selectedHistory.response_data.tests_result"
+            :label="$t('apiTesting.interface.testsResult')"
+            name="tests"
+          >
+            <div class="detail-section">
+              <div v-if="selectedHistory.response_data.tests_result.error" class="test-script-error">
+                <el-alert
+                  type="error"
+                  :title="$t('apiTesting.interface.testsResult') + ' - ' + $t('apiTesting.interface.error')"
+                  :description="selectedHistory.response_data.tests_result.error"
+                  :closable="false"
+                  show-icon
+                />
+              </div>
+
+              <div v-if="selectedHistory.response_data.tests_result.testResults && selectedHistory.response_data.tests_result.testResults.length" class="test-results">
+                <div class="test-result-title">{{ $t('apiTesting.interface.testsResult') }}</div>
+                <div
+                  v-for="(tr, i) in selectedHistory.response_data.tests_result.testResults"
+                  :key="'t' + i"
+                  class="test-result-item"
+                >
+                  <el-tag :type="tr.passed ? 'success' : 'danger'" size="small">{{ tr.passed ? 'PASS' : 'FAIL' }}</el-tag>
+                  <span class="test-name">{{ tr.name }}</span>
+                  <span v-if="!tr.passed" class="test-error">{{ tr.error }}</span>
+                </div>
+              </div>
+
+              <div v-if="selectedHistory.response_data.tests_result.savedEnvVariables && selectedHistory.response_data.tests_result.savedEnvVariables.length" class="saved-vars">
+                <div class="test-result-title">{{ $t('apiTesting.interface.savedEnvVars') }}</div>
+                <div
+                  v-for="(v, i) in selectedHistory.response_data.tests_result.savedEnvVariables"
+                  :key="'v' + i"
+                  class="saved-var-item"
+                >
+                  <span class="var-env">[{{ v.env }}]</span>
+                  <span class="var-name">{{ v.name }}</span> =
+                  <span class="var-value">{{ v.value }}</span>
+                </div>
+              </div>
+
+              <div v-if="selectedHistory.response_data.tests_result.scriptLogs && selectedHistory.response_data.tests_result.scriptLogs.length" class="script-logs">
+                <div class="test-result-title">{{ $t('apiTesting.interface.scriptOutput') }}</div>
+                <pre class="json-content">{{ selectedHistory.response_data.tests_result.scriptLogs.join('\n') }}</pre>
+              </div>
+
+              <div
+                v-if="!(selectedHistory.response_data.tests_result.testResults && selectedHistory.response_data.tests_result.testResults.length)
+                  && !(selectedHistory.response_data.tests_result.savedEnvVariables && selectedHistory.response_data.tests_result.savedEnvVariables.length)
+                  && !(selectedHistory.response_data.tests_result.scriptLogs && selectedHistory.response_data.tests_result.scriptLogs.length)
+                  && !selectedHistory.response_data.tests_result.error"
+                class="empty-response"
+              >
+                <el-empty :description="$t('apiTesting.automation.noTests')" />
+              </div>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </div>
 
@@ -502,5 +561,52 @@ onMounted(() => {
 .empty-response {
   padding: 40px 0;
   text-align: center;
+}
+
+.test-result-title {
+  margin: 16px 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.test-result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.test-result-item .test-name {
+  color: #303133;
+}
+
+.test-result-item .test-error {
+  color: #f56c6c;
+  font-size: 12px;
+}
+
+.saved-var-item {
+  padding: 3px 0;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.saved-var-item .var-env {
+  color: #909399;
+}
+
+.saved-var-item .var-name {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.saved-var-item .var-value {
+  color: #67c23a;
+}
+
+.script-logs .json-content {
+  max-height: 300px;
 }
 </style>

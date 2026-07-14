@@ -329,6 +329,55 @@
         <div class="execution-results">
           <h4>{{ $t('apiTesting.automation.detailedResults') }}</h4>
           <el-table :data="formatExecutionResults(currentExecution.results)">
+            <el-table-column type="expand">
+              <template #default="props">
+                <div v-if="props.row.tests_result" class="exec-tests">
+                  <div v-if="props.row.tests_result.error" class="test-script-error">
+                    <el-alert
+                      type="error"
+                      :title="$t('apiTesting.interface.error')"
+                      :description="props.row.tests_result.error"
+                      :closable="false"
+                      show-icon
+                    />
+                  </div>
+
+                  <div v-if="props.row.tests_result.testResults && props.row.tests_result.testResults.length" class="test-results">
+                    <div class="test-result-title">{{ $t('apiTesting.interface.testsResult') }}</div>
+                    <div
+                      v-for="(tr, i) in props.row.tests_result.testResults"
+                      :key="'t' + i"
+                      class="test-result-item"
+                    >
+                      <el-tag :type="tr.passed ? 'success' : 'danger'" size="small">{{ tr.passed ? 'PASS' : 'FAIL' }}</el-tag>
+                      <span class="test-name">{{ tr.name }}</span>
+                      <span v-if="!tr.passed" class="test-error">{{ tr.error }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="props.row.tests_result.savedEnvVariables && props.row.tests_result.savedEnvVariables.length" class="saved-vars">
+                    <div class="test-result-title">{{ $t('apiTesting.interface.savedEnvVars') }}</div>
+                    <div
+                      v-for="(v, i) in props.row.tests_result.savedEnvVariables"
+                      :key="'v' + i"
+                      class="saved-var-item"
+                    >
+                      <span class="var-env">[{{ v.env }}]</span>
+                      <span class="var-name">{{ v.name }}</span> =
+                      <span class="var-value">{{ v.value }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="props.row.tests_result.scriptLogs && props.row.tests_result.scriptLogs.length" class="script-logs">
+                    <div class="test-result-title">{{ $t('apiTesting.interface.scriptOutput') }}</div>
+                    <pre class="json-content">{{ props.row.tests_result.scriptLogs.join('\n') }}</pre>
+                  </div>
+                </div>
+                <div v-else class="empty-response">
+                  <el-empty :description="$t('apiTesting.automation.noTests')" :image-size="60" />
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column prop="name" :label="$t('apiTesting.automation.requestName')" min-width="200" />
             <el-table-column prop="method" :label="$t('apiTesting.automation.method')" width="80">
               <template #default="scope">
@@ -1357,5 +1406,56 @@ onMounted(() => {
 
 .no-assertions p {
   margin-bottom: 15px;
+}
+
+.exec-tests {
+  padding: 0 20px;
+}
+
+.test-result-title {
+  margin: 12px 0 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.test-result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.test-result-item .test-name {
+  color: #303133;
+}
+
+.test-result-item .test-error {
+  color: #f56c6c;
+  font-size: 12px;
+}
+
+.saved-var-item {
+  padding: 3px 0;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.saved-var-item .var-env {
+  color: #909399;
+}
+
+.saved-var-item .var-name {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.saved-var-item .var-value {
+  color: #67c23a;
+}
+
+.script-logs .json-content {
+  max-height: 300px;
 }
 </style>

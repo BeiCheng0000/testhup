@@ -327,6 +327,7 @@ export default {
     testExecutionResult: 'Test Execution Result',
     executionResult: 'Test Execution Result',
     detailedResults: 'Detailed Results',
+    noTests: 'This request has no Tests script or execution output',
     passRate: 'Pass Rate',
     method: 'Method',
     result: 'Result',

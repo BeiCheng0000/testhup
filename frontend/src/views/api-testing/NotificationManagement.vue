@@ -226,7 +226,8 @@
     <el-dialog
       v-model="showDetailDialog"
       :title="$t('apiTesting.notification.notificationDetail')"
-      width="600px"
+      width="760px"
+      class="notification-detail-dialog"
     >
       <div v-if="currentNotification" class="notification-detail">
         <el-descriptions :column="1" border>
@@ -252,13 +253,20 @@
               {{ currentNotification.status === 'SUCCESS' ? $t('apiTesting.common.success') : $t('apiTesting.common.failed') }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item :label="$t('apiTesting.notification.content')">
-            <pre class="content-pre">{{ currentNotification.content }}</pre>
-          </el-descriptions-item>
-          <el-descriptions-item :label="$t('apiTesting.scheduledTask.errorMessage')" v-if="currentNotification.error_message">
-            {{ currentNotification.error_message }}
-          </el-descriptions-item>
         </el-descriptions>
+
+        <el-alert
+          v-if="currentNotification.error_message"
+          class="detail-error"
+          type="error"
+          :title="$t('apiTesting.scheduledTask.errorMessage')"
+          :description="currentNotification.error_message"
+          :closable="false"
+          show-icon
+        />
+
+        <div class="detail-content-label">{{ $t('apiTesting.notification.content') }}</div>
+        <pre class="content-pre">{{ currentNotification.content }}</pre>
       </div>
     </el-dialog>
 
@@ -645,11 +653,26 @@ onMounted(() => {
 .notification-detail .content-pre {
   white-space: pre-wrap;
   word-wrap: break-word;
-  background: #f5f7fa;
-  padding: 12px;
-  border-radius: 4px;
+  background: #0d1117;
+  color: #c9d1d9;
+  padding: 16px;
+  border-radius: 8px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
+  max-height: 460px;
+  overflow: auto;
+  margin: 0;
+}
+
+.detail-error {
+  margin: 16px 0;
+}
+
+.detail-content-label {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
 }
 </style>

@@ -1,0 +1,1 @@
+cmd /c "cd /d e:\wk\wk_python\testhub_platform-main\frontend && npm run build"

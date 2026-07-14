@@ -70,7 +70,7 @@
                 </div>
 
                 <!-- 普通显示模式 -->
-                <span v-else class="node-label">{{ node.label }}</span>
+                <span v-else class="node-label" :title="node.label">{{ node.label }}</span>
 
                 <span v-if="data.type === 'request' && data.request_type !== 'WEBSOCKET'" class="method-tag" :class="(data.method || 'GET').toLowerCase()">
                   {{ data.method || 'GET' }}
@@ -289,12 +289,20 @@
                     >
                       {{ $t('apiTesting.interface.variableHelper') }}
                     </el-button>
+                    <el-button
+                      size="small"
+                      :icon="Document"
+                      @click="formatRawBody"
+                      :title="$t('apiTesting.interface.formatBody')"
+                      class="format-body-btn"
+                    >
+                      {{ $t('apiTesting.interface.formatBody') }}
+                    </el-button>
                   </div>
-                  <el-input
+                  <CodeEditor
                     ref="rawBodyInputRef"
                     v-model="rawBody"
-                    type="textarea"
-                    :rows="10"
+                    :language="rawType === 'json' ? 'json' : 'text'"
                     :placeholder="$t('apiTesting.interface.inputRequestBody')"
                     class="raw-body"
                   />
@@ -341,9 +349,18 @@
                     v-model="selectedRequest.post_request_script"
                     type="textarea"
                     :rows="10"
-                    placeholder="// 请求后脚本和测试，使用JavaScript语法"
+                    placeholder="// 请求后脚本（Tests）：请求完成后可提取响应数据，并用 pm.environment.set('key', value) 保存/替换当前项目的环境变量，后续接口通过 {{key}} 引用"
                   />
                   <div class="script-buttons">
+                    <el-button
+                      size="small"
+                      :icon="Document"
+                      @click="insertTestScriptExample"
+                      :title="$t('apiTesting.interface.insertTestExample')"
+                      class="script-example-btn"
+                    >
+                      {{ $t('apiTesting.interface.insertTestExample') }}
+                    </el-button>
                     <el-button
                       size="small"
                       :icon="MagicStick"
@@ -742,6 +759,47 @@
                   </div>
                 </div>
               </el-tab-pane>
+
+              <el-tab-pane :label="$t('apiTesting.interface.testsResult')" name="tests-result" v-if="testResults.length > 0 || scriptLogs.length > 0 || savedEnvVariables.length > 0 || testScriptError">
+                <div class="tests-result">
+                  <div v-if="testScriptError" class="test-script-error">
+                    <el-alert type="error" :title="$t('apiTesting.interface.testsResult') + ' - ' + $t('apiTesting.interface.error')" :description="testScriptError" :closable="false" show-icon />
+                  </div>
+
+                  <div v-if="testResults.length" class="test-results">
+                    <div class="test-result-title">{{ $t('apiTesting.interface.testScriptResult') }}</div>
+                    <div
+                      v-for="(r, i) in testResults"
+                      :key="'t' + i"
+                      class="test-result-item"
+                      :class="r.passed ? 'passed' : 'failed'"
+                    >
+                      <el-tag :type="r.passed ? 'success' : 'danger'" size="small">{{ r.passed ? 'PASS' : 'FAIL' }}</el-tag>
+                      <span class="test-name">{{ r.name }}</span>
+                      <span v-if="!r.passed" class="test-error">{{ r.error }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="savedEnvVariables.length" class="saved-vars">
+                    <div class="test-result-title">{{ $t('apiTesting.interface.savedEnvVars') }}</div>
+                    <div
+                      v-for="(v, i) in savedEnvVariables"
+                      :key="'v' + i"
+                      class="saved-var-item"
+                    >
+                      <el-tag size="small" type="info">{{ v.env }}</el-tag>
+                      <span class="var-name">{{ v.name }}</span>
+                      <span class="var-eq">=</span>
+                      <span class="var-value">{{ v.value }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="scriptLogs.length" class="script-logs">
+                    <div class="test-result-title">{{ $t('apiTesting.interface.scriptOutput') }}</div>
+                    <pre v-for="(log, i) in scriptLogs" :key="'l' + i" class="script-log">{{ log }}</pre>
+                  </div>
+                </div>
+              </el-tab-pane>
             </el-tabs>
           </div>
         </div>
@@ -936,6 +994,7 @@ import { Plus, Folder, Document, MagicStick, Search, Close } from '@element-plus
 import api from '@/utils/api'
 import KeyValueEditor from './components/KeyValueEditor.vue'
 import DataFactorySelector from '@/components/DataFactorySelector.vue'
+import CodeEditor from '@/components/CodeEditor.vue'
 import { RequestModelParser } from '@/utils/requestModel'
 import { getVariableFunctions } from '@/api/data-factory'
 import { CodeGenerator } from '@/utils/codeGenerator'
@@ -958,6 +1017,11 @@ const sending = ref(false)
 const saving = ref(false)
 const activeTab = ref('params')
 const responseActiveTab = ref('body')
+// Tests 脚本（请求后脚本）执行结果展示
+const testResults = ref([])
+const scriptLogs = ref([])
+const testScriptError = ref('')
+const savedEnvVariables = ref([])
 const showCreateCollectionDialog = ref(false)
 const showEditCollectionDialog = ref(false)
 const showContextMenu = ref(false)
@@ -1641,7 +1705,14 @@ const sendRequest = async () => {
     sending.value = true
 
     // 发送请求前先自动保存当前的修改
-    // await saveRequest()
+    // 新请求尚未保存时没有 id，直接执行会请求 /requests/null/execute/ 导致 404
+    if (!selectedRequest.value.id) {
+      await saveRequest()
+      // 保存失败（saveRequest 内部已提示并 return）时 id 仍为空，需中止执行
+      if (!selectedRequest.value.id) {
+        return
+      }
+    }
 
     // 准备请求体数据
     let bodyData = {}
@@ -1701,12 +1772,330 @@ const sendRequest = async () => {
     const apiResponse = await api.post(`/api-testing/requests/${selectedRequest.value.id}/execute/`, requestData)
     response.value = apiResponse.data
 
+    // 执行请求后脚本（Tests）：提取响应数据并写回环境变量，供后续接口复用
+    await runPostRequestScript(apiResponse.data)
+
     ElMessage.success('请求成功')
   } catch (error) {
     ElMessage.error('请求失败')
     console.error('请求失败:', error)
   } finally {
     sending.value = false
+  }
+}
+
+// ===================== Tests 脚本（请求后脚本）执行 =====================
+// 提供 Postman 风格的 pm 对象：pm.response / pm.environment / pm.globals / pm.test / pm.expect
+// 用于在请求完成后提取响应数据并保存/替换当前项目的环境变量，供后续接口通过 {{变量名}} 复用。
+
+// ----- 简易但稳健的 JSONPath 求值器（支持 $ / .key / [n] / [*] / [a:b] / .. / [?(@.k op v)]）-----
+const tokenizeJsonPath = (path) => {
+  const tokens = []
+  let i = 0
+  if (path[i] === '$') { i++; tokens.push({ t: 'root' }) }
+  while (i < path.length) {
+    const c = path[i]
+    if (c === '.') {
+      if (path[i + 1] === '.') { tokens.push({ t: 'descend' }); i += 2; continue }
+      const m = /^\.([a-zA-Z_$][\w$]*)/.exec(path.slice(i))
+      if (m) { tokens.push({ t: 'child', key: m[1] }); i += m[0].length; continue }
+      i++
+      continue
+    }
+    if (c === '[') {
+      const end = path.indexOf(']', i)
+      if (end === -1) break
+      const inner = path.slice(i + 1, end).trim()
+      if (inner === '*') tokens.push({ t: 'wildcard' })
+      else if (/^-?\d+$/.test(inner)) tokens.push({ t: 'index', idx: parseInt(inner, 10) })
+      else if ((inner.startsWith('"') && inner.endsWith('"')) || (inner.startsWith("'") && inner.endsWith("'"))) {
+        tokens.push({ t: 'child', key: inner.slice(1, -1) })
+      } else if (/^-?\d*:?-?\d*(:-?\d*)?$/.test(inner)) {
+        const [a, b, step] = inner.split(':')
+        tokens.push({
+          t: 'slice',
+          start: a === '' ? null : parseInt(a, 10),
+          end: b === undefined ? null : (b === '' ? null : parseInt(b, 10)),
+          step: step === undefined || step === '' ? 1 : parseInt(step, 10)
+        })
+      } else if (inner.startsWith('?(') && inner.endsWith(')')) {
+        tokens.push({ t: 'filter', expr: inner.slice(2, -1) })
+      }
+      i = end + 1
+      continue
+    }
+    // 裸标识符（紧跟在 $ 或 .. 之后的 key，例如 $.data 中的 data）
+    const bm = /^([a-zA-Z_$][\w$]*)/.exec(path.slice(i))
+    if (bm) { tokens.push({ t: 'child', key: bm[1] }); i += bm[0].length; continue }
+    i++ // 跳过无法识别的字符
+  }
+  return tokens
+}
+
+const collectDescendants = (x, out) => {
+  if (x && typeof x === 'object') {
+    const vals = Array.isArray(x) ? x : Object.values(x)
+    for (const v of vals) { out.push(v); collectDescendants(v, out) }
+  }
+}
+
+const evalJsonPathFilter = (item, expr) => {
+  try {
+    // 将脚本中的 @ 绑定到当前节点（@ 非合法标识符，用 _it 替代），支持比较/逻辑运算；与 Tests 脚本同属可信用户脚本作用域
+    const fn = new Function('_it', 'return (' + expr.replace(/@/g, '_it') + ')')
+    return !!fn(item)
+  } catch (e) { return false }
+}
+
+// 返回所有匹配结果组成的数组（无匹配返回空数组）
+const jsonPathQuery = (data, path) => {
+  if (data == null || !path || typeof path !== 'string') return []
+  const tokens = tokenizeJsonPath(path)
+  let nodes = [data]
+  for (const tok of tokens) {
+    const next = []
+    switch (tok.t) {
+      case 'root':
+        next.push(...nodes)
+        break
+      case 'child':
+        for (const node of nodes) {
+          if (node != null && typeof node === 'object' && tok.key in node) next.push(node[tok.key])
+        }
+        break
+      case 'wildcard':
+        for (const node of nodes) {
+          if (node != null && typeof node === 'object') {
+            next.push(...(Array.isArray(node) ? node : Object.values(node)))
+          }
+        }
+        break
+      case 'index':
+        for (const node of nodes) {
+          if (Array.isArray(node)) {
+            const idx = tok.idx < 0 ? node.length + tok.idx : tok.idx
+            if (idx >= 0 && idx < node.length) next.push(node[idx])
+          }
+        }
+        break
+      case 'slice': {
+        for (const node of nodes) {
+          if (Array.isArray(node)) {
+            const len = node.length
+            const s = tok.start == null ? 0 : (tok.start < 0 ? len + tok.start : tok.start)
+            const e = tok.end == null ? len : (tok.end < 0 ? len + tok.end : tok.end)
+            for (let k = s; k < e; k += tok.step) next.push(node[k])
+          }
+        }
+        break
+      }
+      case 'filter':
+        for (const node of nodes) {
+          const arr = node && typeof node === 'object'
+            ? (Array.isArray(node) ? node : Object.values(node))
+            : []
+          for (const item of arr) if (evalJsonPathFilter(item, tok.expr)) next.push(item)
+        }
+        break
+      case 'descend':
+        for (const node of nodes) collectDescendants(node, next)
+        break
+    }
+    nodes = next
+  }
+  return nodes
+}
+
+const insertTestScriptExample = () => {
+  const example = `// 示例：提取登录接口返回的 token，保存到当前项目的环境变量
+const json = pm.response.json()
+if (json && json.token) {
+  pm.environment.set('token', json.token)
+  console.log('已保存 token:', json.token)
+} else {
+  console.log('响应中未找到 token 字段')
+}
+
+// 方式二（推荐复杂结构）：使用 JSONPath 提取，返回匹配结果数组，取第一个
+// $.data.token            -> 取 data.token
+// $.list[0].id            -> 取数组第一个元素的 id
+// $.list[*].id            -> 取所有元素的 id（数组）
+// $.users[?(@.role=="admin")].name -> 取 role 为 admin 的 name
+const token = pm.response.jsonPath('$.data.token')[0]
+if (token !== undefined) {
+  pm.environment.set('token', token)
+}
+
+// 也可以保存响应中的其他字段，后续接口用 {{userId}} 引用
+// pm.environment.set('userId', pm.response.jsonPath('$.data.id')[0])
+
+// 断言示例
+pm.test('状态码为 200', function () {
+  pm.expect(pm.response.code).toEqual(200)
+})`
+  const current = selectedRequest.value?.post_request_script || ''
+  selectedRequest.value.post_request_script = current ? current + '\n' + example : example
+  ElMessage.success('已插入 Tests 示例脚本')
+}
+
+const runPostRequestScript = async (responseData) => {
+  const script = selectedRequest.value?.post_request_script
+  // 每次请求先清空上一次结果
+  testResults.value = []
+  scriptLogs.value = []
+  testScriptError.value = ''
+  savedEnvVariables.value = []
+
+  if (!script || !script.trim()) return
+
+  // 脚本为同步执行；其中 pm.environment.set 产生的后端持久化写操作收集后统一 await
+  const pendingEnvWrites = []
+  const getEnvById = (id) => environments.value.find(e => e.id === id)
+
+  // 构造某个环境的读写代理
+  const buildEnvApi = (env) => {
+    if (!env) return null
+    const readValue = (name) => {
+      const v = env.variables ? env.variables[name] : undefined
+      if (v && typeof v === 'object') return v.currentValue ?? v.initialValue ?? ''
+      return v ?? ''
+    }
+    const persist = () =>
+      api.patch(`/api-testing/environments/${env.id}/`, { variables: env.variables })
+        .catch(err => {
+          console.error('保存环境变量失败:', err)
+          ElMessage.error('保存环境变量失败，请检查环境权限')
+        })
+    return {
+      get name() { return env.name },
+      get variables() {
+        const obj = {}
+        if (env.variables) for (const k of Object.keys(env.variables)) obj[k] = readValue(k)
+        return obj
+      },
+      get: readValue,
+      set: (name, value) => {
+        const v = String(value)
+        if (!env.variables) env.variables = {}
+        env.variables[name] = { initialValue: v, currentValue: v }
+        savedEnvVariables.value.push({ env: env.name, name, value: v })
+        pendingEnvWrites.push(persist())
+      },
+      has: (name) => !!(env.variables && (name in env.variables)),
+      unset: (name) => {
+        if (env.variables && name in env.variables) {
+          delete env.variables[name]
+          pendingEnvWrites.push(persist())
+        }
+      },
+      toObject: () => {
+        const obj = {}
+        if (env.variables) for (const k of Object.keys(env.variables)) obj[k] = readValue(k)
+        return obj
+      }
+    }
+  }
+
+  const currentEnvApi = buildEnvApi(getEnvById(selectedEnvironment.value))
+  const globalEnv = environments.value.find(e => e.scope === 'GLOBAL')
+  const globalsApi = buildEnvApi(globalEnv) || currentEnvApi
+
+  const respData = responseData?.response_data || {}
+  const pm = {
+    response: {
+      code: responseData?.status_code,
+      status: responseData?.status_text || '',
+      responseTime: responseData?.response_time,
+      headers: respData.headers || {},
+      text() {
+        return typeof respData.body === 'string'
+          ? respData.body
+          : (respData.body != null ? JSON.stringify(respData.body) : '')
+      },
+      json() {
+        if (respData.json != null) return respData.json
+        try { return JSON.parse(respData.body || 'null') } catch (e) { return null }
+      },
+      // 使用 JSONPath 提取响应字段，返回所有匹配结果组成的数组（如 $.data.token、$.list[0].id、$.list[?(@.type=="vip")].name）
+      jsonPath(expression) {
+        const data = this.json()
+        return jsonPathQuery(data, expression)
+      }
+    },
+    environment: currentEnvApi || {
+      get name() { return '' },
+      get variables() { return {} },
+      get: () => '',
+      set: () => {
+        const msg = '未选择环境，pm.environment.set 未生效，请先在右上角选择环境变量'
+        scriptLogs.value.push('[warn] ' + msg)
+        ElMessage.warning(msg)
+      },
+      has: () => false,
+      unset: () => {},
+      toObject: () => ({})
+    },
+    globals: globalsApi || {
+      get name() { return '' },
+      get variables() { return {} },
+      get: () => '',
+      set: () => {
+        const msg = '未加载到全局环境变量，pm.globals.set 未生效'
+        scriptLogs.value.push('[warn] ' + msg)
+        ElMessage.warning(msg)
+      },
+      has: () => false,
+      unset: () => {},
+      toObject: () => ({})
+    },
+    test(name, fn) {
+      try {
+        if (fn) fn()
+        testResults.value.push({ name, passed: true, error: '' })
+      } catch (e) {
+        testResults.value.push({ name, passed: false, error: e?.message || String(e) })
+      }
+    },
+    expect(actual) {
+      return {
+        toEqual(expected) { if (actual !== expected) throw new Error(`期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`) },
+        toBe(expected) { if (actual !== expected) throw new Error(`期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`) },
+        toContain(sub) { if (!String(actual).includes(String(sub))) throw new Error(`期望包含 ${sub}`) }
+      }
+    },
+    // 对任意 JSON 对象执行 JSONPath，返回所有匹配结果组成的数组
+    jsonPath(obj, expression) {
+      return jsonPathQuery(obj, expression)
+    }
+  }
+
+  // 提供给脚本的 console，输出收集到 scriptLogs 中展示
+  const scriptConsole = {
+    log: (...args) => scriptLogs.value.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+    warn: (...args) => scriptLogs.value.push('[warn] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
+    error: (...args) => scriptLogs.value.push('[error] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '))
+  }
+
+  try {
+    // 使用 new Function 在受限作用域内执行用户脚本（仅暴露 pm 与 console）
+    const fn = new Function('pm', 'console', script)
+    fn(pm, scriptConsole)
+  } catch (e) {
+    testScriptError.value = e?.message || String(e)
+    console.error('Tests 脚本执行出错:', e)
+    ElMessage.error('Tests 脚本执行出错: ' + (e?.message || e))
+    // 出错也切到结果页，方便查看错误
+    responseActiveTab.value = 'tests-result'
+    return
+  }
+
+  if (pendingEnvWrites.length) {
+    await Promise.all(pendingEnvWrites)
+  }
+
+  // 脚本有任何产出（断言/日志/写入环境变量）时，自动切换到"Tests 结果"标签页
+  if (testResults.value.length || scriptLogs.value.length || savedEnvVariables.value.length) {
+    responseActiveTab.value = 'tests-result'
   }
 }
 
@@ -1813,6 +2202,21 @@ const saveRequest = async () => {
     console.error('保存失败:', error)
   } finally {
     saving.value = false
+  }
+}
+
+// 一键美化/格式化请求体（JSON 类型）
+const formatRawBody = () => {
+  if (rawType.value === 'json') {
+    if (!rawBody.value.trim()) return
+    try {
+      const parsed = JSON.parse(rawBody.value)
+      rawBody.value = JSON.stringify(parsed, null, 2)
+    } catch (e) {
+      ElMessage.warning(t('apiTesting.interface.jsonFormatError'))
+    }
+  } else {
+    ElMessage.info(t('apiTesting.interface.jsonFormatOnly'))
   }
 }
 
@@ -1928,27 +2332,15 @@ const evaluateJsonPath = () => {
   }
 
   try {
-    // 简单的JSONPath实现
     const json = response.value.response_data.json
-    let result = json
-
-    // 解析JSONPath表达式
-    const parts = jsonPathExpression.value.split('.').filter(p => p)
-
-    for (const part of parts) {
-      if (part === '$') {
-        result = json
-      } else if (part.includes('[')) {
-        // 处理数组索引
-        const [arrayName, indexStr] = part.split('[')
-        const index = parseInt(indexStr.replace(']', ''))
-        result = result[arrayName][index]
-      } else {
-        result = result[part]
-      }
+    const matches = jsonPathQuery(json, jsonPathExpression.value)
+    if (matches.length === 0) {
+      jsonPathResult.value = '无匹配结果'
+    } else if (matches.length === 1) {
+      jsonPathResult.value = JSON.stringify(matches[0], null, 2)
+    } else {
+      jsonPathResult.value = JSON.stringify(matches, null, 2)
     }
-
-    jsonPathResult.value = JSON.stringify(result, null, 2)
   } catch (e) {
     jsonPathResult.value = 'JSONPath表达式错误'
   }
@@ -2094,16 +2486,28 @@ const exportRequest = () => {
       }
     }
 
+    // 根据当前 UI 的 Body 状态构造 body，确保「导入 curl → 导出 curl」语义一致
+    // 此前 body 被硬编码为 mode:'none'，导致 toCurl 直接丢弃整个请求体
+    let exportBody = { mode: 'none' }
+    if (bodyType.value === 'raw' && rawBody.value) {
+      exportBody = rawType.value === 'json'
+        ? { mode: 'json', json: rawBody.value }
+        : { mode: 'raw', raw: rawBody.value }
+    } else if (bodyType.value === 'form-data' && formData.value?.length) {
+      exportBody = { mode: 'formdata', formdata: formData.value }
+    } else if (bodyType.value === 'x-www-form-urlencoded' && formUrlEncoded.value?.length) {
+      exportBody = { mode: 'urlencoded', urlencoded: formUrlEncoded.value }
+    } else if (bodyType.value === 'binary') {
+      exportBody = { mode: 'binary' }
+    }
+
     const requestModel = {
       method: selectedRequest.value?.method || 'GET',
       baseURL: baseURL,
       path: path,
       query: convertToArrayFormat(selectedRequest.value?.params),
       headers: convertToArrayFormat(selectedRequest.value?.headers),
-      body: {
-        mode: 'none',
-        raw: rawBody.value || ''
-      },
+      body: exportBody,
       timeout: 30000
     }
 
@@ -2735,7 +3139,14 @@ const useLocalVariableCategories = () => {
   align-items: center;
   gap: 8px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   padding: 4px 0;
+}
+
+/* 防止长接口名撑开 el-tree 节点容器，确保右侧请求方式标签始终可见 */
+.collection-tree :deep(.el-tree-node__content) {
+  min-width: 0;
 }
 
 .tree-node .el-icon {
@@ -2745,6 +3156,10 @@ const useLocalVariableCategories = () => {
 
 .node-label {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 14px;
   color: #303133;
   transition: color 0.2s;
@@ -2764,6 +3179,8 @@ const useLocalVariableCategories = () => {
 
 /* 方法标签样式 */
 .method-tag {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 10px;
   padding: 2px 8px;
   border-radius: 10px;
@@ -3476,9 +3893,7 @@ const useLocalVariableCategories = () => {
 
 .raw-body {
   border-radius: 6px;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 14px;
-  line-height: 1.6;
+  height: 380px;
 }
 
 /* 断言编辑器 */
@@ -4161,6 +4576,8 @@ const useLocalVariableCategories = () => {
 
 /* 覆盖方法标签样式 */
 .method-tag {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 10px;
   padding: 2px 8px;
   border-radius: 10px;
@@ -4278,6 +4695,88 @@ const useLocalVariableCategories = () => {
 .method-select :deep(.el-select .el-select__placeholder) {
   background-color: transparent !important;
   color: white !important;
+}
+
+/* Tests 脚本结果面板 */
+.tests-result {
+  padding: 12px 4px;
+}
+.test-result-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #303133;
+  margin: 12px 0 8px;
+}
+.test-result-title:first-child {
+  margin-top: 0;
+}
+.test-result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  background: #f8f9fa;
+}
+.test-result-item.passed {
+  color: #67c23a;
+}
+.test-result-item.failed {
+  color: #f56c6c;
+}
+.test-name {
+  font-weight: 500;
+}
+.test-error {
+  color: #f56c6c;
+  font-size: 12px;
+}
+.saved-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.saved-var-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #f0f9eb;
+  border: 1px solid #e1f3d8;
+  border-radius: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.var-name {
+  font-weight: 600;
+  color: #409eff;
+}
+.var-eq {
+  color: #909399;
+}
+.var-value {
+  color: #303133;
+  word-break: break-all;
+}
+.script-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.script-log {
+  margin: 0;
+  padding: 6px 8px;
+  background: #2d2d2d;
+  color: #e6e6e6;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.test-script-error {
+  margin-bottom: 12px;
 }
 
 </style>

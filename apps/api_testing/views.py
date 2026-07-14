@@ -41,7 +41,7 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-from .utils import execute_assertions, resolve_url_with_host
+from .utils import execute_assertions, resolve_url_with_host, run_post_request_script
 from .operation_logger import log_operation
 from .variable_resolver import VariableResolver
 from .serializers import (
@@ -384,11 +384,19 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        """删除接口时记录日志（只有项目负责人才能删除）"""
-        # 检查是否为所属项目的负责人
-        if instance.collection and instance.collection.project.owner != self.request.user:
-            from rest_framework import permissions
-            raise permissions.exceptions.PermissionDenied({'error': '只有项目负责人才能删除接口'})
+        """删除接口时记录日志（仅允许对项目有权限的用户：负责人或成员）"""
+        # 与 get_queryset 的访问权限保持一致：项目负责人或项目成员均可删除，
+        # 避免「成员能查看/编辑接口却无法删除」的权限不一致问题。
+        # 注意：JWT 认证下 request.user 可能是 TokenUser，缺少 M2M 反向关系，
+        # 因此只使用 pk 值进行比较，避免 AttributeError。
+        if instance.collection:
+            project = instance.collection.project
+            user = self.request.user
+            is_owner = project.owner_id == user.pk
+            is_member = project.members.filter(pk=user.pk).exists()
+            if not (is_owner or is_member):
+                from rest_framework import permissions
+                raise permissions.exceptions.PermissionDenied({'error': '没有权限删除该接口'})
         log_operation(
             operation_type='delete',
             resource_type='request',
@@ -509,6 +517,9 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             assertions_results = execute_assertions(response, assertions)
             
             # 保存请求历史
+            # 执行请求后脚本（Tests）：提取响应数据并写回环境变量（同时供请求历史展示）
+            tests_result = run_post_request_script(api_request, response, response_time, env if environment_id else None)
+
             history = RequestHistory.objects.create(
                 request=api_request,
                 environment_id=environment_id,
@@ -522,13 +533,14 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                 response_data={
                     'headers': dict(response.headers),
                     'body': response.text,
-                    'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None
+                    'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None,
+                    'tests_result': tests_result,
                 },
                 status_code=response.status_code,
                 response_time=response_time,
                 executed_by=request.user
             )
-            
+
             # 记录执行操作
             log_operation(
                 operation_type='execute',
@@ -537,11 +549,12 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                 resource_name=api_request.name,
                 user=request.user
             )
-            
+
             # 返回包含断言结果的数据
             history_data = RequestHistorySerializer(history).data
             history_data['assertions_results'] = assertions_results
-            
+            history_data['tests_result'] = tests_result
+
             return Response(history_data)
             
         except requests.exceptions.Timeout:
@@ -951,6 +964,9 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                     else:
                         failed_count += 1
                     
+                    # 执行请求后脚本（Tests）：提取响应数据并写回环境变量
+                    tests_result = run_post_request_script(api_request, response, response_time, test_suite.environment)
+
                     results.append({
                         'name': api_request.name,
                         'method': api_request.method,
@@ -959,9 +975,10 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                         'response_time': response_time,
                         'passed': passed,
                         'error': error_message,
-                        'assertions_results': assertions_results
+                        'assertions_results': assertions_results,
+                        'tests_result': tests_result,
                     })
-                    
+
                     # 保存请求历史
                     RequestHistory.objects.create(
                         request=api_request,
@@ -976,7 +993,8 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                         response_data={
                             'headers': dict(response.headers),
                             'body': response.text,
-                            'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None
+                            'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None,
+                            'tests_result': tests_result,
                         },
                         status_code=response.status_code,
                         response_time=response_time,
@@ -2155,66 +2173,257 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
 
             # 准备邮件内容
             subject = f"定时任务执行{'成功' if success else '失败'}: {task.name}"
+            task_type_label = '测试套件执行' if task.task_type == 'TEST_SUITE' else 'API请求执行'
+            exec_time = execution_log.created_at.strftime('%Y-%m-%d %H:%M:%S') if execution_log.created_at else '—'
 
-            # 过滤掉详细的测试结果数据，只保留概要信息
-            summary_info = '无详细信息'
-            failed_details = ''
-            if execution_log.result:
-                result_data = execution_log.result
-                # 只保留高级概要字段,过滤掉详细的'results'数组
-                summary_fields = {
-                    'success': result_data.get('success'),
-                    'execution_id': result_data.get('execution_id'),
-                    'passed_count': result_data.get('passed_count'),
-                    'failed_count': result_data.get('failed_count'),
-                    'total_count': result_data.get('total_count')
-                }
-                # 只保留有值的字段
-                summary_info = '\n'.join([f'{k}: {v}' for k, v in summary_fields.items() if v is not None])
+            result_data = execution_log.result or {}
+            passed_count = result_data.get('passed_count')
+            failed_count = result_data.get('failed_count')
+            total_count = result_data.get('total_count')
 
-                # 提取失败请求的详细信息
-                if not success and result_data.get('results'):
-                    failed_items = [
-                        r for r in result_data['results']
-                        if not r.get('passed', False)
-                    ]
-                    if failed_items:
-                        failed_details = '\n\n失败请求详情:\n'
-                        for idx, item in enumerate(failed_items, 1):
-                            failed_details += f"\n  {idx}. [{item.get('method', '?')}] {item.get('name', '?')}\n"
-                            failed_details += f"     URL: {item.get('url', '?')}\n"
-                            if item.get('status_code') is not None:
-                                failed_details += f"     状态码: {item.get('status_code')}\n"
-                            if item.get('response_time') is not None:
-                                failed_details += f"     响应时间: {item.get('response_time'):.0f}ms\n"
-                            if item.get('error'):
-                                failed_details += f"     错误: {item.get('error')}\n"
-                            # 显示断言失败详情
-                            assertion_results = item.get('assertions_results', [])
-                            failed_assertions = [a for a in assertion_results if not a.get('passed', True)]
-                            if failed_assertions:
-                                failed_details += "     断言失败:\n"
-                                for fa in failed_assertions:
-                                    failed_details += f"       - {fa.get('name', '未命名')}: 期望={fa.get('expected')}, 实际={fa.get('actual')}"
-                                    if fa.get('error'):
-                                        failed_details += f", 错误={fa.get('error')}"
-                                    failed_details += "\n"
+            # 统一提取失败请求列表（兼容 TEST_SUITE 的 results 数组 与 API_REQUEST 单结果）
+            failed_items = []
+            if not success:
+                if result_data.get('results'):
+                    for r in result_data['results']:
+                        if not r.get('passed', False):
+                            item = dict(r)
+                            if item.get('response_body') is None and item.get('response_data'):
+                                item['response_body'] = item['response_data'].get('body')
+                            failed_items.append(item)
+                else:
+                    item = dict(result_data)
+                    item['response_body'] = (result_data.get('response_data') or {}).get('body')
+                    failed_items.append(item)
 
-            # 提取错误信息
-            error_info = execution_log.error_message if execution_log.error_message else '无错误信息'
+            error_info = execution_log.error_message or '无错误信息'
 
-            message = f"""
-            任务名称: {task.name}
-            执行状态: {'成功' if success else '失败'}
-            执行时间: {execution_log.created_at.strftime('%Y-%m-%d %H:%M:%S')}
-            任务类型: {'测试套件执行' if task.task_type == 'TEST_SUITE' else 'API请求执行'}
+            import json as _json
+            import html as _html
 
-            执行概要:
-            {summary_info}
+            def fmt_body(body):
+                if not body:
+                    return None
+                try:
+                    return _json.dumps(_json.loads(body), ensure_ascii=False, indent=2)
+                except Exception:
+                    return body
 
-            错误信息:
-            {error_info}{failed_details}
-            """
+            def esc(v):
+                return _html.escape('' if v is None else str(v))
+
+            def assertion_type_label(t):
+                return {
+                    'status_code': '状态码',
+                    'response_time': '响应时间',
+                    'contains': '包含文本',
+                    'json_path': 'JSON路径',
+                    'header': '响应头',
+                    'equals': '完全等于',
+                }.get(t, t or '未知')
+
+            def assertion_basis(a):
+                """返回断言依据描述，如 json_path 的 $.code、响应头名称等"""
+                t = a.get('type')
+                if t == 'json_path':
+                    return a.get('json_path') or '(未配置表达式)'
+                if t == 'header':
+                    return a.get('header_name') or '(未配置响应头)'
+                if t == 'status_code':
+                    return '响应状态码'
+                if t == 'response_time':
+                    return f"响应时间 ≤ {a.get('expected')}ms"
+                if t == 'contains':
+                    return '响应体包含'
+                if t == 'equals':
+                    return '响应体等于'
+                return ''
+
+            def dedup_assertions(lst):
+                """去除完全一致的断言结果（同名/同类型/同期望/同实际/同错误），避免套件与请求级断言合并后出现重复"""
+                seen = set()
+                out = []
+                for a in lst:
+                    key = (a.get('name'), a.get('type'), a.get('expected'),
+                           a.get('actual'), a.get('error'))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append(a)
+                return out
+
+            # ===== 明文内容（用于通知日志存储与纯文本回退） =====
+            plain_lines = [
+                f"任务名称: {task.name}",
+                f"执行状态: {'成功' if success else '失败'}",
+                f"执行时间: {exec_time}",
+                f"任务类型: {task_type_label}",
+            ]
+            if total_count is not None:
+                plain_lines.append(f"执行概要: 共 {total_count} 个请求，通过 {passed_count or 0}，失败 {failed_count or 0}")
+            plain_lines.append("")
+            plain_lines.append("错误信息:")
+            plain_lines.append(error_info)
+            for idx, item in enumerate(failed_items, 1):
+                plain_lines.append("")
+                plain_lines.append(f"失败请求 {idx}: [{item.get('method', '?')}] {item.get('name', '?')}")
+                plain_lines.append(f"  URL: {item.get('url', '?')}")
+                if item.get('status_code') is not None:
+                    plain_lines.append(f"  状态码: {item.get('status_code')}")
+                if item.get('response_time') is not None:
+                    plain_lines.append(f"  响应时间: {item.get('response_time'):.0f}ms")
+                if item.get('error'):
+                    plain_lines.append(f"  错误: {item.get('error')}")
+                failed_assertions = dedup_assertions(
+                    [a for a in item.get('assertions_results', []) if not a.get('passed', True)]
+                )
+                if failed_assertions:
+                    plain_lines.append("  断言失败明细:")
+                    for fa in failed_assertions:
+                        basis = assertion_basis(fa)
+                        line = f"    - [{assertion_type_label(fa.get('type'))}] {fa.get('name', '未命名')}"
+                        if basis:
+                            line += f" ({basis})"
+                        line += f": 期望={fa.get('expected')}, 实际={fa.get('actual')}"
+                        if fa.get('error'):
+                            line += f", 错误={fa.get('error')}"
+                        plain_lines.append(line)
+                body = fmt_body(item.get('response_body'))
+                if body:
+                    plain_lines.append("  响应实体:")
+                    plain_lines.append(body)
+            plain_text = '\n'.join(plain_lines)
+
+            # ===== HTML 邮件内容 =====
+            header_color = '#f53f3f' if not success else '#00b42a'
+            status_label = '执行失败' if not success else '执行成功'
+
+            summary_html = ''
+            if total_count is not None:
+                summary_html = (
+                    '<div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;">'
+                    f'<span style="background:#e8ffea;color:#00b42a;border:1px solid #b7eb8f;padding:4px 12px;border-radius:20px;font-size:13px;">总计 {esc(total_count)}</span>'
+                    f'<span style="background:#e8ffea;color:#00b42a;border:1px solid #b7eb8f;padding:4px 12px;border-radius:20px;font-size:13px;">通过 {esc(passed_count or 0)}</span>'
+                    f'<span style="background:#fff1f0;color:#f53f3f;border:1px solid #ffccc7;padding:4px 12px;border-radius:20px;font-size:13px;">失败 {esc(failed_count or 0)}</span>'
+                    '</div>'
+                )
+
+            no_assert = '<div style="color:#86909c;font-size:13px;margin-top:6px;">无断言失败明细</div>'
+            no_failed = '<div style="color:#86909c;font-size:13px;">无失败请求明细</div>'
+            cards_html = ''
+            for idx, item in enumerate(failed_items, 1):
+                failed_assertions = dedup_assertions(
+                    [a for a in item.get('assertions_results', []) if not a.get('passed', True)]
+                )
+                fa_rows = ''
+                if failed_assertions:
+                    fa_rows = '<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;">' \
+                              '<tr style="background:#fafafa;">' \
+                              '<th style="border:1px solid #e5e6eb;padding:6px 8px;text-align:left;">类型</th>' \
+                              '<th style="border:1px solid #e5e6eb;padding:6px 8px;text-align:left;">断言名称</th>' \
+                              '<th style="border:1px solid #e5e6eb;padding:6px 8px;text-align:left;">断言依据</th>' \
+                              '<th style="border:1px solid #e5e6eb;padding:6px 8px;text-align:left;">期望值</th>' \
+                              '<th style="border:1px solid #e5e6eb;padding:6px 8px;text-align:left;">实际值</th>' \
+                              '<th style="border:1px solid #e5e6eb;padding:6px 8px;text-align:left;">结果</th></tr>'
+                    for fa in failed_assertions:
+                        fa_rows += (
+                            '<tr>'
+                            f'<td style="border:1px solid #e5e6eb;padding:6px 8px;white-space:nowrap;">{esc(assertion_type_label(fa.get("type")))}</td>'
+                            f'<td style="border:1px solid #e5e6eb;padding:6px 8px;">{esc(fa.get("name", "未命名"))}</td>'
+                            f'<td style="border:1px solid #e5e6eb;padding:6px 8px;color:#1677ff;white-space:nowrap;">{esc(assertion_basis(fa))}</td>'
+                            f'<td style="border:1px solid #e5e6eb;padding:6px 8px;">{esc(fa.get("expected"))}</td>'
+                            f'<td style="border:1px solid #e5e6eb;padding:6px 8px;">{esc(fa.get("actual"))}</td>'
+                            f'<td style="border:1px solid #e5e6eb;padding:6px 8px;color:{"#00b42a" if fa.get("passed", True) else "#f53f3f"};font-weight:600;white-space:nowrap;">{"断言通过" if fa.get("passed", True) else "断言失败"}</td>'
+                            '</tr>'
+                        )
+                    fa_rows += '</table>'
+
+                # 响应概览：展示实际状态码与响应实体（JSON 自动美化），便于对照断言失败原因
+                resp_overview = ''
+                overview_parts = []
+                if item.get('status_code') is not None:
+                    overview_parts.append(f'状态码: <b>{esc(item.get("status_code"))}</b>')
+                if item.get('response_time') is not None:
+                    overview_parts.append(f'响应时间: {esc(round(item.get("response_time"), 0))}ms')
+                if overview_parts:
+                    resp_overview += '<div style="margin-top:8px;">' + ' ｜ '.join(overview_parts) + '</div>'
+                overview_json = fmt_body(item.get('response_body'))
+                if overview_json:
+                    resp_overview += (
+                        '<div style="font-weight:600;margin:10px 0 6px;font-size:13px;color:#1f2329;">响应实体（JSON）</div>'
+                        f'<pre style="background:#0d1117;color:#c9d1d9;padding:12px;border-radius:6px;font-size:12px;'
+                        f'line-height:1.5;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0;">'
+                        f'{esc(overview_json)}</pre>'
+                    )
+
+                # 失败原因汇总：列出该请求所有失败断言（覆盖如 断言2 等多条失败），保证信息完整
+                err_parts = []
+                for fa in failed_assertions:
+                    fa_name = fa.get('name', '未命名断言')
+                    if fa.get('error'):
+                        err_parts.append(f"断言失败: {fa_name} - {fa.get('error')}")
+                    elif fa.get('expected') is not None and fa.get('actual') is not None:
+                        err_parts.append(f"断言失败: {fa_name} - 期望={fa.get('expected')}, 实际={fa.get('actual')}")
+                    elif fa.get('expected') is not None:
+                        err_parts.append(f"断言失败: {fa_name} - 期望={fa.get('expected')}, 实际值未获取")
+                    elif fa.get('actual') is not None:
+                        err_parts.append(f"断言失败: {fa_name} - 实际值={fa.get('actual')}, 期望值未配置")
+                    else:
+                        err_parts.append(f"断言失败: {fa_name}")
+                err_html = ''
+                if err_parts:
+                    err_html = (
+                        '<div style="margin-top:8px;color:#f53f3f;font-size:13px;line-height:1.6;">'
+                        f'失败原因：{"；".join(esc(p) for p in err_parts)}</div>'
+                    )
+
+                cards_html += (
+                    '<div style="margin-top:16px;border:1px solid #ffccc7;border-radius:8px;overflow:hidden;">'
+                    f'<div style="background:#fff2f0;padding:10px 16px;font-weight:600;color:#cf1322;font-size:14px;">'
+                    f'{idx}. [{esc(item.get("method", "?"))}] {esc(item.get("name", "?"))}</div>'
+                    '<div style="padding:16px;font-size:13px;color:#4e5969;">'
+                    f'<div style="word-break:break-all;">URL: {esc(item.get("url", "?"))}</div>'
+                    f'{resp_overview}'
+                    f'{err_html}'
+                    '<div style="font-weight:600;margin:12px 0 6px;font-size:13px;color:#1f2329;">断言失败明细</div>'
+                    f'{fa_rows if fa_rows else no_assert}'
+                    '</div></div>'
+                )
+
+            error_block = (
+                '<div style="margin-top:20px;background:#fff1f0;border:1px solid #ffccc7;border-radius:8px;padding:16px;">'
+                '<div style="font-weight:600;color:#cf1322;font-size:14px;">执行错误信息</div>'
+                f'<pre style="white-space:pre-wrap;word-break:break-all;background:#fff;color:#cf1322;'
+                f'padding:10px;border-radius:6px;font-size:12px;line-height:1.5;margin:8px 0 0;">{esc(error_info)}</pre>'
+                '</div>'
+            )
+
+            html_content = (
+                '<!DOCTYPE html>'
+                '<html lang="zh-CN"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1.0"></head>'
+                '<body style="margin:0;padding:0;background:#f4f6f8;'
+                "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;color:#1f2329;\">"
+                '<div style="max-width:760px;margin:0 auto;padding:24px;">'
+                f'<div style="background:{header_color};border-radius:12px 12px 0 0;padding:20px 24px;">'
+                '<div style="font-size:13px;color:rgba(255,255,255,0.85);">定时任务执行通知</div>'
+                f'<div style="font-size:20px;font-weight:600;color:#fff;margin-top:4px;">{esc(status_label)}：{esc(task.name)}</div>'
+                '</div>'
+                '<div style="background:#fff;border:1px solid #e5e6eb;border-top:none;border-radius:0 0 12px 12px;padding:24px;">'
+                '<table style="width:100%;border-collapse:collapse;font-size:14px;">'
+                f'<tr><td style="padding:8px 0;color:#86909c;width:96px;">任务名称</td><td style="padding:8px 0;">{esc(task.name)}</td></tr>'
+                f'<tr><td style="padding:8px 0;color:#86909c;">执行状态</td>'
+                f'<td style="padding:8px 0;"><span style="background:{header_color};color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;">{esc(status_label)}</span></td></tr>'
+                f'<tr><td style="padding:8px 0;color:#86909c;">执行时间</td><td style="padding:8px 0;">{esc(exec_time)}</td></tr>'
+                f'<tr><td style="padding:8px 0;color:#86909c;">任务类型</td><td style="padding:8px 0;">{esc(task_type_label)}</td></tr>'
+                '</table>'
+                f'{summary_html}'
+                f'{error_block}'
+                f'<div style="font-weight:600;margin:24px 0 4px;font-size:15px;color:#1f2329;">失败请求详情（{len(failed_items)}）</div>'
+                f'{cards_html if cards_html else no_failed}'
+                '<div style="margin-top:24px;font-size:12px;color:#8a8f99;text-align:center;">本邮件由 TestHub 平台自动发送，请勿直接回复。</div>'
+                '</div></div></body></html>'
+            )
 
             # 获取收件人列表
             recipients = []
@@ -2296,17 +2505,19 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
                 )
                 email_msg = EmailMessage(
                     subject=subject,
-                    body=message,
+                    body=html_content,
                     from_email=from_email,
                     to=recipients,
                     connection=connection,
                 )
+                email_msg.content_subtype = 'html'
                 email_msg.send(fail_silently=False)
             else:
                 logger.info(f"邮箱域名 {domain} 未在自动识别列表中，使用默认SMTP配置")
                 send_mail(
                     subject=subject,
-                    message=message,
+                    message=plain_text,
+                    html_message=html_content,
                     from_email=from_email,
                     recipient_list=recipients,
                     fail_silently=False,
@@ -2323,7 +2534,7 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
                 sender_name='系统邮件通知',
                 sender_email=from_email,
                 recipient_info=[{'email': email} for email in recipients],
-                notification_content=message,
+                notification_content=plain_text,
                 status='success',
                 sent_at=timezone.now()
             )

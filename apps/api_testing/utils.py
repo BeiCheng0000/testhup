@@ -19,6 +19,9 @@ def execute_assertions(response, assertions):
         result = {
             'name': assertion.get('name', '未命名断言'),
             'type': assertion.get('type'),
+            # 携带断言依据（如 json_path 的 $.code 表达式、响应头名称），供报警邮件/报告展示
+            'json_path': assertion.get('json_path', ''),
+            'header_name': assertion.get('header_name', ''),
             'passed': False,
             'expected': None,
             'actual': None,
@@ -104,6 +107,78 @@ def execute_assertions(response, assertions):
         results.append(result)
 
     return results
+
+
+def run_post_request_script(api_request, response, response_time, environment):
+    """执行请求后脚本（Tests），返回结构化结果并持久化环境变量变更。
+
+    通过 node 子进程运行 tests_runner.js，与前端 runPostRequestScript 提供完全一致的
+    pm / console API。适用于自动化测试（测试套件）与定时任务的服务端执行。
+
+    :return: tests_result 字典（含 testResults/scriptLogs/savedEnvVariables/error），
+             脚本为空时返回 None
+    """
+    script = getattr(api_request, 'post_request_script', '') or ''
+    if not script.strip():
+        return None
+
+    from .js_runner import run_tests_script
+    from .models import Environment
+
+    content_type = response.headers.get('content-type', '') or ''
+    response_info = {
+        'status_code': response.status_code,
+        'status_text': getattr(response, 'reason', '') or '',
+        'response_time': response_time,
+        'response_data': {
+            'headers': dict(response.headers),
+            'body': response.text,
+            'json': response.json() if 'application/json' in content_type else None,
+        },
+    }
+
+    # 构建环境列表：当前环境（current:true）+ 项目级全局环境变量
+    environments = []
+    if environment and getattr(environment, 'variables', None):
+        environments.append({
+            'id': environment.id,
+            'name': environment.name,
+            'scope': environment.scope,
+            'current': True,
+            'variables': environment.variables,
+        })
+
+    project = getattr(environment, 'project', None) if environment else None
+    if not project and getattr(api_request, 'collection', None):
+        project = getattr(api_request.collection, 'project', None)
+    global_env = None
+    if project:
+        global_env = Environment.objects.filter(project=project, scope='GLOBAL').first()
+    if global_env and (not environment or global_env.id != environment.id):
+        environments.append({
+            'id': global_env.id,
+            'name': global_env.name,
+            'scope': global_env.scope,
+            'current': False,
+            'variables': global_env.variables,
+        })
+
+    result = run_tests_script(script, response_info, environments)
+    if not result:
+        return None
+
+    # 持久化环境变量变更，并同步更新内存中的 environment 对象以支持请求间变量串联
+    for upd in result.get('updatedEnvironments', []) or []:
+        try:
+            env_obj = Environment.objects.get(id=upd.get('id'))
+            env_obj.variables = upd.get('variables')
+            env_obj.save(update_fields=['variables'])
+            if environment is not None and env_obj.id == environment.id:
+                environment.variables = upd.get('variables')
+        except Exception:
+            logger.exception('持久化 Tests 脚本写入的环境变量失败')
+
+    return result
 
 
 def execute_test_suite(test_suite, environment, executed_by):
@@ -285,6 +360,9 @@ def execute_test_suite(test_suite, environment, executed_by):
                 else:
                     failed_count += 1
 
+                # 执行请求后脚本（Tests）：提取响应数据并写回环境变量
+                tests_result = run_post_request_script(api_request, response, response_time, environment)
+
                 results.append({
                     'name': api_request.name,
                     'method': api_request.method,
@@ -293,7 +371,10 @@ def execute_test_suite(test_suite, environment, executed_by):
                     'response_time': response_time,
                     'passed': passed,
                     'error': error_message,
-                    'assertions_results': assertions_results
+                    'assertions_results': assertions_results,
+                    'tests_result': tests_result,
+                    # 仅为失败（断言失败）的请求携带响应实体，供报警邮件展示问题响应
+                    'response_body': response.text if not passed else None,
                 })
 
                 # 保存请求历史
@@ -310,7 +391,8 @@ def execute_test_suite(test_suite, environment, executed_by):
                     response_data={
                         'headers': dict(response.headers),
                         'body': response.text,
-                        'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None
+                        'json': response.json() if response.headers.get('content-type', '').startswith('application/json') else None,
+                        'tests_result': tests_result,
                     },
                     status_code=response.status_code,
                     response_time=response_time,
@@ -530,6 +612,9 @@ def execute_api_request(api_request, environment, executed_by):
                     error_message = f"断言失败: {name} - 类型={atype}, 缺少期望/实际信息"
                 break
 
+        # 执行请求后脚本（Tests）：提取响应数据并写回环境变量
+        tests_result = run_post_request_script(api_request, response, response_time, environment)
+
         # 保存请求历史
         history = RequestHistory.objects.create(
             request=api_request,
@@ -545,7 +630,8 @@ def execute_api_request(api_request, environment, executed_by):
                 'headers': dict(response.headers),
                 'body': response.text,
                 'json': response.json() if response.headers.get('content-type', '').startswith(
-                    'application/json') else None
+                    'application/json') else None,
+                'tests_result': tests_result,
             },
             status_code=response.status_code,
             response_time=response_time,
@@ -576,6 +662,7 @@ def execute_api_request(api_request, environment, executed_by):
             'status_code': response.status_code,
             'response_time': response_time,
             'assertions_results': assertions_results,
+            'tests_result': tests_result,
             'response_data': {
                 'headers': dict(response.headers),
                 'body': response.text,
