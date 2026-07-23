@@ -1,5 +1,4 @@
 import { RequestModel } from './requestModel'
-import * as curlconverter from 'curlconverter'
 
 export interface CodeTemplate {
   language: string
@@ -112,6 +111,10 @@ export class CodeGenerator {
     }
     
     const mappedLanguage = this.languageMap[language] || language
+
+    // curlconverter 体积巨大（含 tree-sitter WASM 解析器，约 700KB），改为按需动态导入，
+    // 避免被静态打进 InterfaceManagement 分块导致接口管理页面在慢速隧道下加载缓慢。
+    const curlconverter = await import('curlconverter')
 
     try {
       switch (mappedLanguage) {

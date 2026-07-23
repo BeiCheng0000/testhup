@@ -36,7 +36,7 @@ from .serializers import (
     ApiProjectSerializer, ApiCollectionSerializer, ApiRequestSerializer,
     EnvironmentSerializer, RequestHistorySerializer, RequestHistoryListSerializer,
     TestSuiteSerializer, TestSuiteRequestSerializer, TestExecutionSerializer,
-    UserSerializer, ScheduledTaskSerializer, TaskExecutionLogSerializer,
+    TestExecutionListSerializer, UserSerializer, ScheduledTaskSerializer, TaskExecutionLogSerializer,
     NotificationLogSerializer, TaskNotificationSettingSerializer,
     NotificationLogDetailSerializer,
     TaskNotificationSettingDetailSerializer, OperationLogSerializer
@@ -1293,14 +1293,34 @@ class TestExecutionViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['status', 'test_suite']
     ordering = ['-created_at']
     pagination_class = StandardPagination
-    
+
+    def get_serializer_class(self):
+        """列表查询用轻量级扁平序列化器，详情用完整序列化器"""
+        if self.action == 'list':
+            return TestExecutionListSerializer
+        return TestExecutionSerializer
+
     def get_queryset(self):
         user = self.request.user
-        return TestExecution.objects.filter(
-            test_suite__project__in=ApiProject.objects.filter(
-                models.Q(owner=user) | models.Q(members=user)
-            )
-        ).distinct()
+        # 使用 Exists 子查询替代 JOIN + DISTINCT，避免重复行和 DISTINCT 开销
+        user_project_exists = ApiProject.objects.filter(
+            models.Q(owner=user) | models.Q(members=user)
+        ).filter(id=OuterRef('test_suite__project_id'))
+
+        qs = TestExecution.objects.filter(
+            Exists(user_project_exists)
+        ).select_related(
+            # 列表序列化器只需这几个关联字段（避免嵌套 TestSuite/User 的 N+1）
+            'test_suite', 'test_suite__project', 'executed_by'
+        ).prefetch_related(
+            'test_suite__testsuiterequest_set'
+        )
+
+        # 列表接口不加载 results（最重的 JSON 字段）
+        if self.action == 'list':
+            qs = qs.defer('results')
+
+        return qs
     
     @action(detail=True, methods=['post'], url_path='generate-allure-report')
     def generate_allure_report(self, request, pk=None):

@@ -424,7 +424,7 @@
             {{ getAverageExecutionTime(scope.row) }}
           </template>
         </el-table-column>
-        <el-table-column prop="executed_by.username" :label="$t('apiTesting.automation.executor')" width="110" />
+        <el-table-column prop="executed_by_name" :label="$t('apiTesting.automation.executor')" width="110" />
         <el-table-column prop="created_at" :label="$t('apiTesting.automation.executionTime')" width="170">
           <template #default="scope">
             {{ formatDate(scope.row.created_at) }}
@@ -1233,8 +1233,14 @@ const reloadCurrentSuite = async () => {
   }
 }
 
-const viewExecutionDetail = (execution) => {
-  currentExecution.value = execution
+const viewExecutionDetail = async (execution) => {
+  try {
+    // 重新从 API 加载完整详情（包含 results 等列表未返回的字段）
+    const response = await api.get(`/api-testing/test-executions/${execution.id}/`)
+    currentExecution.value = response.data
+  } catch (e) {
+    currentExecution.value = execution
+  }
   showExecutionDialog.value = true
 }
 

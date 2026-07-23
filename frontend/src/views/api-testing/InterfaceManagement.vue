@@ -988,7 +988,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Folder, Document, MagicStick, Search, Close } from '@element-plus/icons-vue'
 import api from '@/utils/api'
@@ -1227,60 +1227,66 @@ const buildTree = (items) => {
   return roots
 }
 
-const findCollectionById = (collections, id) => {
-  for (const collection of collections) {
-    if (collection.id === id) return collection
-    if (collection.children) {
-      const found = findCollectionById(collection.children, id)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-const clearCollectionChildren = (collection) => {
-  if (collection.children) {
-    collection.children = collection.children.filter(child => child.type === 'collection')
-    collection.children.forEach(child => clearCollectionChildren(child))
-  }
-}
-
 const loadRequests = async () => {
   if (!selectedProject.value) return
 
   try {
-    const requests = await fetchAllPages('/api-testing/requests/')
-
-    // 清空所有集合的子节点（请求）
-    collections.value.forEach(collection => {
-      clearCollectionChildren(collection)
+    // 只拉取当前项目的请求，避免一次性加载全库请求（数据量过大导致前端处理/渲染卡顿）
+    const requests = await fetchAllPages('/api-testing/requests/', {
+      project: selectedProject.value
     })
 
-    // 过滤掉之前的未分类接口（type 为 request 且 id 为 null 的项）
+    // 清空之前挂载的请求节点，仅保留集合节点
+    const cleanTree = (nodes) => {
+      nodes.forEach(n => {
+        if (n.type === 'collection') {
+          n.children = (n.children || []).filter(c => c.type === 'collection')
+          cleanTree(n.children)
+        }
+      })
+    }
+    cleanTree(collections.value)
     collections.value = collections.value.filter(item => item.type === 'collection')
 
-    // 将请求添加到对应集合中或直接添加到根级别
+    // 建立集合节点索引（O(N) 一次），替代每个请求递归查找（O(N^2)）
+    const collectionMap = new Map()
+    const indexTree = (nodes) => {
+      nodes.forEach(n => {
+        if (n.type === 'collection') {
+          collectionMap.set(n.id, n)
+          indexTree(n.children || [])
+        }
+      })
+    }
+    indexTree(collections.value)
+
+    // 树节点只保留展示所需字段，避免大 JSON（body/headers/assertions 等）被做成响应式对象
+    const toRequestNode = (r) => ({
+      id: r.id,
+      name: r.name,
+      type: 'request',
+      method: r.method,
+      request_type: r.request_type,
+      url: r.url,
+      collection: r.collection
+    })
+
     requests.forEach(request => {
+      const node = toRequestNode(request)
       if (request.collection) {
-        // 有关联集合的请求，添加到对应集合下
-        const collection = findCollectionById(collections.value, request.collection)
+        const collection = collectionMap.get(request.collection)
         if (collection) {
           if (!collection.children) collection.children = []
-          collection.children.push({
-            ...request,
-            type: 'request',
-            name: request.name
-          })
+          collection.children.push(node)
+          return
         }
-      } else {
-        // 未关联集合的请求，直接添加到集合列表的根级别
-        collections.value.push({
-          ...request,
-          type: 'request',
-          name: request.name
-        })
       }
+      // 未关联集合的请求，直接挂到根级别
+      collections.value.push(node)
     })
+
+    // markRaw 避免对成百上千个节点建立深度响应式代理（详情仍通过点击按需拉取）
+    collections.value = markRaw(collections.value)
   } catch (error) {
     ElMessage.error('加载请求失败')
     console.error('加载请求失败:', error)

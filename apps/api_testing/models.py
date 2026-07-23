@@ -245,6 +245,10 @@ class TestExecution(models.Model):
         verbose_name = '测试执行'
         verbose_name_plural = '测试执行'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_at'], name='idx_exec_created_at'),
+            models.Index(fields=['test_suite'], name='idx_exec_suite'),
+        ]
 
     def __str__(self):
         return f"{self.test_suite.name} - {self.created_at}"

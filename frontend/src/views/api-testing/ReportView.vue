@@ -30,7 +30,7 @@
             <span style="color: #f56c6c">{{ scope.row.failed_requests }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="executed_by.username" :label="$t('apiTesting.report.executor')" width="120" />
+        <el-table-column prop="executed_by_name" :label="$t('apiTesting.report.executor')" width="120" />
         <el-table-column prop="created_at" :label="$t('apiTesting.report.executionTime')" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.created_at) }}
