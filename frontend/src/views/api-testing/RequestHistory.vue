@@ -382,16 +382,23 @@ const handleCurrentChange = (page) => {
   loadHistory()
 }
 
-const viewDetail = (history) => {
-  selectedHistory.value = history
+const viewDetail = async (history) => {
+  try {
+    // 重新从 API 加载完整详情（包含 request_data / response_data）
+    const response = await api.get(`/api-testing/histories/${history.id}/`)
+    selectedHistory.value = response.data
+  } catch (e) {
+    // 网络出错时降级使用列表行数据
+    selectedHistory.value = history
+  }
   detailTab.value = 'request'
   showDetailDialog.value = true
 }
 
 const retryRequest = async (history) => {
   try {
-    const response = await api.post(`/api-testing/requests/${history.request.id}/execute/`, {
-      environment_id: history.environment?.id
+    const response = await api.post(`/api-testing/requests/${history.request_id}/execute/`, {
+      environment_id: history.environment_id
     })
     ElMessage.success(t('apiTesting.messages.success.requestRetried'))
     showDetailDialog.value = false

@@ -63,6 +63,11 @@ class ApiCollection(models.Model):
         return self.name
 
 
+def default_status_assertions():
+    """默认的断言规则（模块级函数，便于迁移序列化）。"""
+    return [{"name": "状态码断言", "type": "status_code", "expected": 200}]
+
+
 class ApiRequest(models.Model):
     """API请求模型"""
     REQUEST_TYPE_CHOICES = [
@@ -94,7 +99,7 @@ class ApiRequest(models.Model):
     auth = models.JSONField(default=dict, verbose_name='认证信息')
     pre_request_script = models.TextField(blank=True, verbose_name='请求前脚本')
     post_request_script = models.TextField(blank=True, verbose_name='请求后脚本')
-    assertions = models.JSONField(default=lambda: [{"name": "状态码断言", "type": "status_code", "expected": 200}], verbose_name='断言规则')
+    assertions = models.JSONField(default=default_status_assertions, verbose_name='断言规则')
     order = models.IntegerField(default=0, verbose_name='排序')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建者')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
@@ -105,6 +110,9 @@ class ApiRequest(models.Model):
         verbose_name = 'API请求'
         verbose_name_plural = 'API请求'
         ordering = ['order', 'created_at']
+        indexes = [
+            models.Index(fields=['request_type'], name='idx_requests_req_type'),
+        ]
 
     def __str__(self):
         return self.name
@@ -155,6 +163,10 @@ class RequestHistory(models.Model):
         verbose_name = '请求历史'
         verbose_name_plural = '请求历史'
         ordering = ['-executed_at']
+        indexes = [
+            models.Index(fields=['executed_at'], name='idx_histories_exec_at'),
+            models.Index(fields=['request'], name='idx_histories_request'),
+        ]
 
     def __str__(self):
         return f"{self.request.name} - {self.executed_at}"
@@ -189,7 +201,7 @@ class TestSuiteRequest(models.Model):
     test_suite = models.ForeignKey(TestSuite, on_delete=models.CASCADE, verbose_name='测试套件')
     request = models.ForeignKey(ApiRequest, on_delete=models.CASCADE, verbose_name='API请求')
     order = models.IntegerField(default=0, verbose_name='执行顺序')
-    assertions = models.JSONField(default=lambda: [{"name": "状态码断言", "type": "status_code", "expected": 200}], verbose_name='断言规则')
+    assertions = models.JSONField(default=default_status_assertions, verbose_name='断言规则')
     enabled = models.BooleanField(default=True, verbose_name='是否启用')
 
     class Meta:
@@ -220,9 +232,11 @@ class TestExecution(models.Model):
     start_time = models.DateTimeField(null=True, blank=True, verbose_name='开始时间')
     end_time = models.DateTimeField(null=True, blank=True, verbose_name='结束时间')
     total_requests = models.IntegerField(default=0, verbose_name='总请求数')
+    completed_requests = models.IntegerField(default=0, verbose_name='已完成请求数')
     passed_requests = models.IntegerField(default=0, verbose_name='通过请求数')
     failed_requests = models.IntegerField(default=0, verbose_name='失败请求数')
-    results = models.JSONField(default=dict, verbose_name='执行结果')
+    current_request = models.CharField(max_length=512, null=True, blank=True, verbose_name='当前执行接口')
+    results = models.JSONField(default=list, verbose_name='执行结果')
     executed_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='执行者')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
 

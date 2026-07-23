@@ -1150,15 +1150,26 @@ const loadProjects = async () => {
   }
 }
 
+// 分页感知拉取：DRF 默认 PAGE_SIZE=20，这里循环翻页拿全量，避免集合/请求被截断
+const fetchAllPages = async (url, params = {}) => {
+  let all = []
+  let page = 1
+  while (true) {
+    const resp = await api.get(url, { params: { ...params, page } })
+    const data = resp.data
+    const items = Array.isArray(data) ? data : (data.results || [])
+    all = all.concat(items)
+    if (Array.isArray(data) || !data.next) break
+    page += 1
+  }
+  return all
+}
+
 const loadCollections = async (projectId) => {
   try {
-    const response = await api.get('/api-testing/collections/', {
-      params: {
-        project: projectId
-      }
+    const collectionsData = await fetchAllPages('/api-testing/collections/', {
+      project: projectId
     })
-    // 后端可能返回分页格式 { results: [...] } 或直接返回数组
-    const collectionsData = response.data.results || response.data || []
 
     // 构建树形结构
     collections.value = buildTree(collectionsData)
@@ -1238,8 +1249,7 @@ const loadRequests = async () => {
   if (!selectedProject.value) return
 
   try {
-    const response = await api.get('/api-testing/requests/')
-    const requests = response.data.results || response.data || []
+    const requests = await fetchAllPages('/api-testing/requests/')
 
     // 清空所有集合的子节点（请求）
     collections.value.forEach(collection => {

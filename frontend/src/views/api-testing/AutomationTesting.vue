@@ -83,6 +83,10 @@
                   <el-icon><VideoPlay /></el-icon>
                   {{ $t('apiTesting.automation.runTest') }}
                 </el-button>
+                <el-button @click="openHistoryDialog">
+                  <el-icon><Clock /></el-icon>
+                  {{ $t('apiTesting.automation.viewHistory') }}
+                </el-button>
                 <el-button @click="editSuite(selectedSuite)">
                   <el-icon><Edit /></el-icon>
                   {{ $t('apiTesting.common.edit') }}
@@ -146,55 +150,7 @@
             </el-table>
           </div>
 
-          <!-- 执行历史 -->
-          <div class="executions-section">
-            <div class="section-header">
-              <h5>{{ $t('apiTesting.automation.executionHistory') }}</h5>
-              <el-button size="small" @click="loadExecutions">
-                <el-icon><Refresh /></el-icon>
-                {{ $t('apiTesting.automation.refresh') }}
-              </el-button>
-            </div>
 
-            <el-table :data="executions" v-loading="executionsLoading">
-              <el-table-column prop="status" :label="$t('apiTesting.common.status')" width="100">
-                <template #default="scope">
-                  <el-tag :type="getStatusType(scope.row.status)">
-                    {{ getStatusText(scope.row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="total_requests" :label="$t('apiTesting.automation.totalRequests')" width="100" />
-              <el-table-column prop="passed_requests" :label="$t('apiTesting.automation.passedCount')" width="100">
-                <template #default="scope">
-                  <span style="color: #67c23a">{{ scope.row.passed_requests }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="failed_requests" :label="$t('apiTesting.automation.failedCount')" width="100">
-                <template #default="scope">
-                  <span style="color: #f56c6c">{{ scope.row.failed_requests }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column :label="$t('apiTesting.automation.averageTime')" width="120">
-                <template #default="scope">
-                  {{ getAverageExecutionTime(scope.row) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="executed_by.username" :label="$t('apiTesting.automation.executor')" width="120" />
-              <el-table-column prop="created_at" :label="$t('apiTesting.automation.executionTime')" width="160">
-                <template #default="scope">
-                  {{ formatDate(scope.row.created_at) }}
-                </template>
-              </el-table-column>
-              <el-table-column :label="$t('apiTesting.common.operation')" width="120">
-                <template #default="scope">
-                  <el-button link type="primary" @click="viewExecutionDetail(scope.row)" size="small">
-                    {{ $t('apiTesting.automation.viewDetails') }}
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
         </div>
       </div>
     </div>
@@ -326,6 +282,34 @@
           </el-row>
         </div>
 
+        <!-- 实时进度 -->
+        <div class="execution-progress" style="margin: 16px 0;">
+          <el-row type="flex" :gutter="16" align="middle">
+            <el-col :span="14">
+              <el-progress
+                :percentage="getProgressPercent(currentExecution)"
+                :status="progressStatus(currentExecution)"
+                :stroke-width="18"
+              />
+            </el-col>
+            <el-col :span="10">
+              <el-tag :type="statusTagType(currentExecution.status)" effect="dark" size="large">
+                {{ statusText(currentExecution.status) }}
+              </el-tag>
+              <span
+                v-if="currentExecution.status === 'RUNNING'"
+                class="current-request"
+                :title="currentExecution.current_request"
+              >
+                {{ $t('apiTesting.automation.currentRequest') }}: {{ currentExecution.current_request || '...' }}
+              </span>
+            </el-col>
+          </el-row>
+          <div v-if="currentExecution.status === 'RUNNING'" class="progress-text">
+            {{ $t('apiTesting.automation.completedOf', { done: currentExecution.completed_requests || 0, total: currentExecution.total_requests || 0 }) }}
+          </div>
+        </div>
+
         <div class="execution-results">
           <h4>{{ $t('apiTesting.automation.detailedResults') }}</h4>
           <el-table :data="formatExecutionResults(currentExecution.results)">
@@ -406,6 +390,57 @@
 
       <template #footer>
         <el-button @click="showExecutionDialog = false">{{ $t('apiTesting.common.close') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 执行历史对话框 -->
+    <el-dialog
+      v-model="showHistoryDialog"
+      :title="$t('apiTesting.automation.executionHistory') + ' - ' + (selectedSuite?.name || '')"
+      width="900px"
+      :close-on-click-modal="false"
+    >
+      <el-table :data="executions" v-loading="executionsLoading">
+        <el-table-column prop="status" :label="$t('apiTesting.common.status')" width="110">
+          <template #default="scope">
+            <el-tag :type="getStatusType(scope.row.status)">
+              {{ getStatusText(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="total_requests" :label="$t('apiTesting.automation.totalRequests')" width="90" align="center" />
+        <el-table-column prop="passed_requests" :label="$t('apiTesting.automation.passedCount')" width="90" align="center">
+          <template #default="scope">
+            <span style="color: #67c23a">{{ scope.row.passed_requests }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="failed_requests" :label="$t('apiTesting.automation.failedCount')" width="90" align="center">
+          <template #default="scope">
+            <span style="color: #f56c6c">{{ scope.row.failed_requests }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('apiTesting.automation.averageTime')" width="110">
+          <template #default="scope">
+            {{ getAverageExecutionTime(scope.row) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="executed_by.username" :label="$t('apiTesting.automation.executor')" width="110" />
+        <el-table-column prop="created_at" :label="$t('apiTesting.automation.executionTime')" width="170">
+          <template #default="scope">
+            {{ formatDate(scope.row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('apiTesting.common.operation')" width="100" fixed="right">
+          <template #default="scope">
+            <el-button link type="primary" @click="showHistoryDialog = false; viewExecutionDetail(scope.row)" size="small">
+              {{ $t('apiTesting.automation.viewDetails') }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="showHistoryDialog = false">{{ $t('apiTesting.common.close') }}</el-button>
       </template>
     </el-dialog>
 
@@ -562,7 +597,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import {
   Plus, Refresh, MoreFilled, VideoPlay, Edit,
-  Folder, Document, Delete
+  Folder, Document, Delete, Clock
 } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 import dayjs from 'dayjs'
@@ -581,6 +616,7 @@ const executionsLoading = ref(false)
 const showCreateSuiteDialog = ref(false)
 const showAddRequestDialog = ref(false)
 const showExecutionDialog = ref(false)
+const showHistoryDialog = ref(false)
 const showAssertionDialog = ref(false)
 const editingSuite = ref(null)
 const submittingSuite = ref(false)
@@ -678,6 +714,44 @@ const getPassRate = (execution) => {
   return ((execution.passed_requests / execution.total_requests) * 100).toFixed(1)
 }
 
+// 实时进度百分比
+const getProgressPercent = (execution) => {
+  const total = execution.total_requests || 0
+  const done = execution.completed_requests || 0
+  if (total === 0) return 0
+  return Math.min(100, Math.round((done / total) * 100))
+}
+
+// 进度条状态：执行中无状态，完成成功，失败异常
+const progressStatus = (execution) => {
+  if (execution.status === 'COMPLETED') return 'success'
+  if (execution.status === 'FAILED') return 'exception'
+  return ''
+}
+
+// 状态标签颜色
+const statusTagType = (status) => {
+  switch (status) {
+    case 'RUNNING': return 'warning'
+    case 'COMPLETED': return 'success'
+    case 'FAILED': return 'danger'
+    case 'CANCELLED': return 'info'
+    default: return 'info'
+  }
+}
+
+// 状态文案
+const statusText = (status) => {
+  const map = {
+    PENDING: t('apiTesting.automation.status.pending'),
+    RUNNING: t('apiTesting.automation.status.running'),
+    COMPLETED: t('apiTesting.automation.status.completed'),
+    FAILED: t('apiTesting.automation.status.failed'),
+    CANCELLED: t('apiTesting.automation.status.cancelled')
+  }
+  return map[status] || status
+}
+
 const getEnvironmentName = (environmentId) => {
   if (!environmentId) return t('apiTesting.automation.noEnvironment')
   const env = environments.value.find(e => e.id === environmentId)
@@ -739,17 +813,30 @@ const loadRequestTree = async () => {
   if (!selectedProject.value) return
 
   try {
+    // 分页感知拉取：DRF 默认 PAGE_SIZE=20，循环翻页拿全量，避免集合/请求被截断
+    const fetchAllPages = async (url, params = {}) => {
+      let all = []
+      let page = 1
+      while (true) {
+        const resp = await api.get(url, { params: { ...params, page } })
+        const data = resp.data
+        const items = Array.isArray(data) ? data : (data.results || [])
+        all = all.concat(items)
+        if (Array.isArray(data) || !data.next) break
+        page += 1
+      }
+      return all
+    }
+
     // 加载集合
-    const collectionsRes = await api.get('/api-testing/collections/', {
-      params: { project: selectedProject.value }
+    const collections = await fetchAllPages('/api-testing/collections/', {
+      project: selectedProject.value
     })
-    const collections = collectionsRes.data.results || collectionsRes.data
 
     // 加载请求，传递project参数
-    const requestsRes = await api.get('/api-testing/requests/', {
-      params: { project: selectedProject.value }
+    const requests = await fetchAllPages('/api-testing/requests/', {
+      project: selectedProject.value
     })
-    const requests = requestsRes.data.results || requestsRes.data
 
     // 构建树形结构
     requestTree.value = buildRequestTree(collections, requests)
@@ -799,6 +886,11 @@ const buildRequestTree = (collections, requests) => {
   })
   
   return roots
+}
+
+const openHistoryDialog = () => {
+  showHistoryDialog.value = true
+  loadExecutions()
 }
 
 const loadExecutions = async () => {
@@ -866,14 +958,30 @@ const runTestSuite = async (suite) => {
   running.value = true
   try {
     const response = await api.post(`/api-testing/test-suites/${suite.id}/execute/`)
+    const execId = response.data.id
     currentExecution.value = response.data
     showExecutionDialog.value = true
     await loadExecutions()
     ElMessage.success(t('apiTesting.messages.success.suiteExecuted'))
+
+    // 后端已在后台线程异步执行，这里轮询执行记录直到完成（避免 171 个接口长请求超时）
+    const timer = setInterval(async () => {
+      try {
+        const r = await api.get(`/api-testing/test-executions/${execId}/`)
+        currentExecution.value = r.data
+        if (r.data.status === 'COMPLETED' || r.data.status === 'FAILED') {
+          clearInterval(timer)
+          running.value = false
+          showExecutionDialog.value = true
+        }
+      } catch (e) {
+        clearInterval(timer)
+        running.value = false
+      }
+    }, 1500)
   } catch (error) {
-    ElMessage.error(t('apiTesting.messages.error.executeSuite'))
-  } finally {
     running.value = false
+    ElMessage.error(t('apiTesting.messages.error.executeSuite'))
   }
 }
 
@@ -1291,8 +1399,7 @@ onMounted(() => {
   color: #909399;
 }
 
-.requests-section,
-.executions-section {
+.requests-section {
   margin-bottom: 30px;
 }
 
@@ -1346,6 +1453,31 @@ onMounted(() => {
   padding: 20px;
   background: #f8f9fa;
   border-radius: 6px;
+}
+
+.execution-progress {
+  padding: 16px 20px;
+  background: #f4f7ff;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+}
+
+.execution-progress .current-request {
+  margin-left: 12px;
+  color: #e6a23c;
+  font-weight: 600;
+  max-width: 320px;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.execution-progress .progress-text {
+  margin-top: 10px;
+  color: #909399;
+  font-size: 13px;
 }
 
 .execution-results h4 {

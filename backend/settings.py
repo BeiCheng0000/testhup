@@ -121,6 +121,8 @@ DATABASES = {
             'charset': 'utf8mb4',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         },
+        'CONN_MAX_AGE': 600,  # 持久连接存活 10 分钟，减少后台线程频繁创建/销毁连接
+        'CONN_HEALTH_CHECKS': True,  # 每次使用前检查连接存活，避免使用已被 MySQL 回收的连接
     }
 }
 

@@ -33,7 +33,12 @@ def execute_assertions(response, assertions):
             actual = None
             passed = False
             # 优先从 assertion 自身取 expected（兼容多种字段命名）
-            expected_val = assertion.get('expected') or assertion.get('expected_value') or assertion.get('value')
+            # 注意：不能用 `or` 链，因为 0 也是合法的期望值（如 $.code==0）
+            expected_val = assertion.get('expected')
+            if expected_val is None:
+                expected_val = assertion.get('expected_value')
+            if expected_val is None:
+                expected_val = assertion.get('value')
             result['expected'] = expected_val
 
             if assertion_type == 'status_code':
@@ -89,7 +94,12 @@ def execute_assertions(response, assertions):
                 header_name = assertion.get('header_name', '')
                 actual = response.headers.get(header_name)
                 # header 类型使用 expected_value 而不是 expected
-                result['expected'] = assertion.get('expected_value') or assertion.get('expected') or assertion.get('value')
+                header_expected = assertion.get('expected_value')
+                if header_expected is None:
+                    header_expected = assertion.get('expected')
+                if header_expected is None:
+                    header_expected = assertion.get('value')
+                result['expected'] = header_expected
                 passed = str(actual) == str(result['expected']) if actual is not None and result['expected'] is not None else actual == result['expected']
 
             elif assertion_type == 'equals':
@@ -333,8 +343,10 @@ def execute_test_suite(test_suite, environment, executed_by):
                     # 将套件断言结果合并到总断言结果中
                     assertions_results = assertions_results + suite_assertions_results
 
-                # 检查接口自身的断言
+                # 检查接口自身的断言（累积所有失败断言，避免只显示第一条；并去重套件/请求级合并导致的重复）
                 if passed and assertions_results:
+                    failed_assert_msgs = []
+                    seen_msgs = set()
                     for assertion_result in assertions_results:
                         if not assertion_result.get('passed', True):
                             passed = False
@@ -344,16 +356,20 @@ def execute_test_suite(test_suite, environment, executed_by):
                             actual = assertion_result.get('actual')
                             err = assertion_result.get('error')
                             if err:
-                                error_message = f"断言失败: {name} - {err}"
+                                msg = f"断言失败: {name} - {err}"
                             elif expected is not None and actual is not None:
-                                error_message = f"断言失败: {name} - 期望={expected}, 实际={actual}"
+                                msg = f"断言失败: {name} - 期望={expected}, 实际={actual}"
                             elif expected is not None:
-                                error_message = f"断言失败: {name} - 期望={expected}, 实际值未获取"
+                                msg = f"断言失败: {name} - 期望={expected}, 实际值未获取"
                             elif actual is not None:
-                                error_message = f"断言失败: {name} - 实际值={actual}, 期望值未配置"
+                                msg = f"断言失败: {name} - 实际值={actual}, 期望值未配置"
                             else:
-                                error_message = f"断言失败: {name} - 类型={atype}, 缺少期望/实际信息"
-                            break
+                                msg = f"断言失败: {name} - 类型={atype}, 缺少期望/实际信息"
+                            if msg not in seen_msgs:
+                                seen_msgs.add(msg)
+                                failed_assert_msgs.append(msg)
+                    if failed_assert_msgs:
+                        error_message = '\n'.join(failed_assert_msgs)
 
                 if passed:
                     passed_count += 1
@@ -592,6 +608,8 @@ def execute_api_request(api_request, environment, executed_by):
         # 检查所有断言是否通过
         passed = True
         error_message = ''
+        failed_assert_msgs = []
+        seen_msgs = set()
         for assertion_result in assertions_results:
             if not assertion_result.get('passed', True):
                 passed = False
@@ -601,16 +619,20 @@ def execute_api_request(api_request, environment, executed_by):
                 actual = assertion_result.get('actual')
                 err = assertion_result.get('error')
                 if err:
-                    error_message = f"断言失败: {name} - {err}"
+                    msg = f"断言失败: {name} - {err}"
                 elif expected is not None and actual is not None:
-                    error_message = f"断言失败: {name} - 期望={expected}, 实际={actual}"
+                    msg = f"断言失败: {name} - 期望={expected}, 实际={actual}"
                 elif expected is not None:
-                    error_message = f"断言失败: {name} - 期望={expected}, 实际值未获取"
+                    msg = f"断言失败: {name} - 期望={expected}, 实际值未获取"
                 elif actual is not None:
-                    error_message = f"断言失败: {name} - 实际值={actual}, 期望值未配置"
+                    msg = f"断言失败: {name} - 实际值={actual}, 期望值未配置"
                 else:
-                    error_message = f"断言失败: {name} - 类型={atype}, 缺少期望/实际信息"
-                break
+                    msg = f"断言失败: {name} - 类型={atype}, 缺少期望/实际信息"
+                if msg not in seen_msgs:
+                    seen_msgs.add(msg)
+                    failed_assert_msgs.append(msg)
+        if failed_assert_msgs:
+            error_message = '\n'.join(failed_assert_msgs)
 
         # 执行请求后脚本（Tests）：提取响应数据并写回环境变量
         tests_result = run_post_request_script(api_request, response, response_time, environment)

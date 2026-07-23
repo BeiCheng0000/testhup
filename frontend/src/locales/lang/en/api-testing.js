@@ -295,6 +295,7 @@ export default {
     createdAt: 'Created: ',
     createTime: 'Created: ',
     runTest: 'Run Test',
+    viewHistory: 'History',
     testRequests: 'Test Requests',
     addRequest: 'Add Request',
     enable: 'Enable',
@@ -343,6 +344,9 @@ export default {
       cancelled: 'Cancelled',
       passed: 'Passed'
     },
+    executing: 'Executing',
+    completedOf: 'Completed {done} / {total}',
+    currentRequest: 'Current request',
     confirmDeleteSuite: 'Are you sure to delete test suite "{name}"?',
     confirmRemoveRequest: 'Are you sure to remove this request?',
     selectAtLeastOne: 'Please select at least one request',

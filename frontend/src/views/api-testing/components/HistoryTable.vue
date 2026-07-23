@@ -7,15 +7,15 @@
       @selection-change="$emit('selection-change', $event)"
     >
       <el-table-column type="selection" width="55" align="center" />
-      <el-table-column prop="request.name" :label="$t('apiTesting.component.historyTable.requestName')" min-width="200" />
-      <el-table-column prop="request.method" :label="$t('apiTesting.component.historyTable.method')" width="80">
+      <el-table-column prop="request_name" :label="$t('apiTesting.component.historyTable.requestName')" min-width="200" />
+      <el-table-column prop="request_method" :label="$t('apiTesting.component.historyTable.method')" width="80">
         <template #default="scope">
-          <el-tag :type="getMethodType(scope.row.request.method)" size="small">
-            {{ scope.row.request.method }}
+          <el-tag :type="getMethodType(scope.row.request_method)" size="small">
+            {{ scope.row.request_method }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="request_data.url" :label="$t('apiTesting.component.historyTable.url')" min-width="300" show-overflow-tooltip />
+      <el-table-column prop="request_data_url" :label="$t('apiTesting.component.historyTable.url')" min-width="300" show-overflow-tooltip />
       <el-table-column prop="status_code" :label="$t('apiTesting.component.historyTable.statusCode')" width="100">
         <template #default="scope">
           <el-tag
@@ -33,12 +33,12 @@
           {{ scope.row.response_time?.toFixed(0) || 0 }}ms
         </template>
       </el-table-column>
-      <el-table-column prop="environment.name" :label="$t('apiTesting.component.historyTable.environment')" width="120">
+      <el-table-column prop="environment_name" :label="$t('apiTesting.component.historyTable.environment')" width="120">
         <template #default="scope">
-          {{ scope.row.environment?.name || $t('apiTesting.component.historyTable.noEnvironment') }}
+          {{ scope.row.environment_name || $t('apiTesting.component.historyTable.noEnvironment') }}
         </template>
       </el-table-column>
-      <el-table-column prop="executed_by.username" :label="$t('apiTesting.component.historyTable.executor')" width="120" />
+      <el-table-column prop="executed_by_name" :label="$t('apiTesting.component.historyTable.executor')" width="120" />
       <el-table-column prop="executed_at" :label="$t('apiTesting.component.historyTable.executionTime')" width="160">
         <template #default="scope">
           {{ formatDate(scope.row.executed_at) }}

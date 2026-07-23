@@ -315,6 +315,7 @@ export default {
     createdAt: '创建时间：',
     createTime: '创建时间：',
     runTest: '运行测试',
+    viewHistory: '执行历史',
     testRequests: '测试请求',
     addRequest: '添加请求',
     enable: '启用',
@@ -362,6 +363,9 @@ export default {
       cancelled: '已取消',
       passed: '通过'
     },
+    executing: '正在执行',
+    completedOf: '已完成 {done} / {total}',
+    currentRequest: '当前接口',
     confirmDeleteSuite: '确定要删除测试套件 "{name}" 吗？',
     confirmRemoveRequest: '确定要移除这个请求吗？',
     selectAtLeastOne: '请选择至少一个请求',

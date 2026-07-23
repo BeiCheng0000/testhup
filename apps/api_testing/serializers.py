@@ -181,6 +181,34 @@ class RequestHistorySerializer(serializers.ModelSerializer):
         ]
 
 
+class RequestHistoryListSerializer(serializers.ModelSerializer):
+    """轻量级列表序列化器——不嵌套完整对象，不加载 response_data"""
+    request_id = serializers.IntegerField(source='request.id', read_only=True)
+    request_name = serializers.CharField(source='request.name', read_only=True)
+    request_url = serializers.CharField(source='request.url', read_only=True)
+    request_method = serializers.CharField(source='request.method', read_only=True)
+    request_type = serializers.CharField(source='request.request_type', read_only=True)
+    request_data_url = serializers.SerializerMethodField()
+    environment_id = serializers.IntegerField(source='environment.id', read_only=True, allow_null=True)
+    environment_name = serializers.CharField(source='environment.name', read_only=True)
+    executed_by_name = serializers.CharField(source='executed_by.username', read_only=True)
+
+    class Meta:
+        model = RequestHistory
+        fields = [
+            'id', 'request_id', 'request_name', 'request_url', 'request_method', 'request_type',
+            'request_data_url', 'environment_id', 'environment_name', 'status_code', 'response_time',
+            'error_message', 'assertions_results',
+            'executed_by_name', 'executed_at'
+        ]
+
+    def get_request_data_url(self, obj):
+        """从 request_data JSON 中提取实际请求的 URL"""
+        if obj.request_data and isinstance(obj.request_data, dict):
+            return obj.request_data.get('url', '')
+        return ''
+
+
 class TestSuiteRequestSerializer(serializers.ModelSerializer):
     request = ApiRequestSerializer(read_only=True)
 
@@ -214,8 +242,8 @@ class TestExecutionSerializer(serializers.ModelSerializer):
         model = TestExecution
         fields = [
             'id', 'test_suite', 'status', 'start_time', 'end_time',
-            'total_requests', 'passed_requests', 'failed_requests',
-            'results', 'executed_by', 'created_at'
+            'total_requests', 'completed_requests', 'passed_requests', 'failed_requests',
+            'current_request', 'results', 'executed_by', 'created_at'
         ]
 
     def to_representation(self, instance):
