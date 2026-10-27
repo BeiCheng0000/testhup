@@ -170,98 +170,121 @@
     <el-dialog
         v-model="detailDialogVisible"
         :title="$t('notification.logs.detailDialog.title')"
-        width="600px"
+        width="660px"
+        top="6vh"
         :before-close="handleDetailDialogClose"
         :close-on-click-modal="false"
         :close-on-press-escape="false"
         :modal="true"
-        :destroy-on-close="false"
+        :destroy-on-close="true"
     >
-      <el-form
-          v-if="selectedLog"
-          label-position="top"
-          class="notification-detail-form"
-      >
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item :label="$t('notification.logs.detailDialog.taskName')">
-              <span>{{ selectedLog.task_name }}</span>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('notification.logs.detailDialog.taskType')">
-              <span>{{ selectedLog.task_type_display }}</span>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('notification.logs.detailDialog.notificationType')">
-              <el-tag :type="getNotificationTypeTagType(selectedLog.notification_type_display)">
-                {{ selectedLog.notification_type_display }}
-              </el-tag>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('notification.logs.detailDialog.status')">
-              <el-tag :type="getStatusTagType(selectedLog.status_display)">
+      <div v-if="selectedLog" class="ntf-detail">
+        <!-- 状态头卡 -->
+        <div class="ntf-status-card" :class="statusClass(selectedLog)">
+          <div class="ntf-status-icon">
+            <el-icon :size="26"><component :is="statusIcon(selectedLog)"/></el-icon>
+          </div>
+          <div class="ntf-status-main">
+            <div class="ntf-status-badges">
+              <el-tag :type="getStatusTagType(selectedLog.status_display)" effect="dark" size="small">
                 {{ selectedLog.status_display }}
               </el-tag>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('notification.logs.detailDialog.notificationTime')">
-              <span>{{ formatDate(selectedLog.created_at) }}</span>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="$t('notification.logs.detailDialog.sentTime')">
-              <span>{{ selectedLog.sent_at ? formatDate(selectedLog.sent_at) : '-' }}</span>
-            </el-form-item>
-          </el-col>
-          <el-col :span="24" v-if="selectedLog.notification_target_display && selectedLog.notification_target_display.length > 0">
-            <el-form-item :label="$t('notification.logs.detailDialog.notificationTarget')">
-              <div class="notification-targets">
-                <el-tag
-                    v-for="(target, index) in selectedLog.notification_target_display"
-                    :key="index"
-                    class="target-tag"
-                    size="small"
-                    :type="getTargetTagType(target.type)"
-                >
-                  {{ target.display }}（{{ target.name }}）
-                </el-tag>
-                <span v-if="!selectedLog.notification_target_display || selectedLog.notification_target_display.length === 0">-</span>
+              <el-tag :type="getNotificationTypeTagType(selectedLog.notification_type_display)" size="small">
+                {{ selectedLog.notification_type_display }}
+              </el-tag>
+            </div>
+            <div class="ntf-status-sub">{{ selectedLog.task_name }} · {{ selectedLog.task_type_display }}</div>
+          </div>
+          <div class="ntf-status-time">
+            <div class="ntf-time-label">{{ $t('notification.logs.detailDialog.notificationTime') }}</div>
+            <div class="ntf-time-value">{{ formatDate(selectedLog.created_at) }}</div>
+          </div>
+        </div>
+
+        <!-- 基本信息 -->
+        <div class="ntf-section">
+          <div class="ntf-section-title">{{ $t('notification.logs.detailDialog.basicInfo') }}</div>
+          <div class="ntf-grid">
+            <div class="ntf-cell">
+              <span class="ntf-cell-label">{{ $t('notification.logs.detailDialog.taskName') }}</span>
+              <span class="ntf-cell-value">{{ selectedLog.task_name }}</span>
+            </div>
+            <div class="ntf-cell">
+              <span class="ntf-cell-label">{{ $t('notification.logs.detailDialog.taskType') }}</span>
+              <span class="ntf-cell-value">{{ selectedLog.task_type_display }}</span>
+            </div>
+            <div class="ntf-cell">
+              <span class="ntf-cell-label">{{ $t('notification.logs.detailDialog.status') }}</span>
+              <span class="ntf-cell-value">
+                <el-tag :type="getStatusTagType(selectedLog.status_display)" size="small">{{ selectedLog.status_display }}</el-tag>
+              </span>
+            </div>
+            <div class="ntf-cell">
+              <span class="ntf-cell-label">{{ $t('notification.logs.detailDialog.sentTime') }}</span>
+              <span class="ntf-cell-value">{{ selectedLog.sent_at ? formatDate(selectedLog.sent_at) : '-' }}</span>
+            </div>
+            <div class="ntf-cell">
+              <span class="ntf-cell-label">{{ $t('notification.logs.detailDialog.retryCount') }}</span>
+              <span class="ntf-cell-value">{{ selectedLog.retry_count != null ? selectedLog.retry_count : '-' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 通知对象 -->
+        <div class="ntf-section" v-if="selectedLog.notification_target_display && selectedLog.notification_target_display.length">
+          <div class="ntf-section-title">{{ $t('notification.logs.detailDialog.notificationTarget') }}</div>
+          <div class="notification-targets">
+            <el-tag
+                v-for="(target, index) in selectedLog.notification_target_display"
+                :key="index"
+                class="target-tag"
+                size="small"
+                :type="getTargetTagType(target.type)"
+            >
+              {{ target.display }}（{{ target.name }}）
+            </el-tag>
+          </div>
+        </div>
+
+        <!-- 消息内容 -->
+        <div class="ntf-section">
+          <div class="ntf-section-title ntf-section-title--row">
+            <span>{{ $t('notification.logs.detailDialog.notificationContent') }}</span>
+            <el-button text size="small" type="primary" @click="showRaw = !showRaw">
+              {{ showRaw ? $t('notification.logs.detailDialog.notificationContent') : $t('notification.logs.detailDialog.viewRaw') }}
+            </el-button>
+          </div>
+
+          <div v-if="showRaw" class="ntf-raw">
+            <pre>{{ selectedLog.notification_content || '-' }}</pre>
+          </div>
+          <div v-else class="ntf-msg-card">
+            <template v-if="messageLines.length">
+              <div
+                  v-for="(line, i) in messageLines"
+                  :key="i"
+                  :class="line.type === 'kv' ? 'ntf-msg-kv' : 'ntf-msg-p'"
+              >
+                <template v-if="line.type === 'kv'">
+                  <span class="ntf-msg-k" v-html="renderInline(line.key)"></span>
+                  <span class="ntf-msg-v" v-html="renderInline(line.value)"></span>
+                </template>
+                <span v-else v-html="renderInline(line.text)"></span>
               </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item :label="$t('notification.logs.detailDialog.notificationContent')">
-              <div class="notification-content">
-                <div v-if="parsedNotificationContent" class="notification-content-parsed">
-                  <div class="content-item" v-for="(item, index) in parsedNotificationContent" :key="index">
-                    <span class="content-label">{{ item.label }}:</span>
-                    <span class="content-value">{{ item.value }}</span>
-                  </div>
-                </div>
-                <div v-else class="notification-content-raw">
-                  <pre>{{ selectedLog.notification_content || '-' }}</pre>
-                </div>
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="24" v-if="selectedLog.error_message">
-            <el-form-item :label="$t('notification.logs.detailDialog.errorMessage')">
-              <div class="error-message">
-                <el-alert
-                    :title="selectedLog.error_message"
-                    type="error"
-                    show-icon
-                    :closable="false"
-                />
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
+            </template>
+            <div v-else class="ntf-msg-empty">{{ selectedLog.notification_content || '-' }}</div>
+          </div>
+        </div>
+
+        <!-- 错误信息 -->
+        <div class="ntf-section ntf-error-section" v-if="selectedLog.error_message">
+          <div class="ntf-section-title ntf-error-title">
+            <el-icon><WarningFilled/></el-icon>
+            {{ $t('notification.logs.detailDialog.errorMessage') }}
+          </div>
+          <div class="ntf-error">{{ selectedLog.error_message }}</div>
+        </div>
+      </div>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="detailDialogVisible = false">{{ $t('notification.logs.detailDialog.close') }}</el-button>
@@ -272,7 +295,9 @@
 </template>
 
 <script>
-import {Search} from '@element-plus/icons-vue'
+import {
+  Search, CircleCheckFilled, CircleCloseFilled, WarningFilled, InfoFilled
+} from '@element-plus/icons-vue'
 import {ref, reactive, onMounted, computed} from 'vue'
 import {useI18n} from 'vue-i18n'
 import {ElMessage} from 'element-plus'
@@ -281,7 +306,11 @@ import axios from 'axios'
 export default {
   name: 'NotificationLogs',
   components: {
-    Search
+    Search,
+    CircleCheckFilled,
+    CircleCloseFilled,
+    WarningFilled,
+    InfoFilled
   },
   setup() {
     const {t, locale} = useI18n()
@@ -291,6 +320,7 @@ export default {
     const logsData = ref([])
     const detailDialogVisible = ref(false)
     const selectedLog = ref(null)
+    const showRaw = ref(false)
 
     // 搜索表单
     const searchForm = reactive({
@@ -479,90 +509,81 @@ export default {
       return [webhookInfo.name || webhookInfo.type]
     }
 
-    // 解析通知内容为结构化数据
-    const parsedNotificationContent = computed(() => {
-      if (!selectedLog.value || !selectedLog.value.notification_content) {
-        return null
-      }
-
-      const content = selectedLog.value.notification_content
-
+    // 从通知内容中解析出可读文本（兼容企微/飞书 markdown、飞书卡片、纯文本）
+    const extractContentText = (raw) => {
+      if (!raw) return ''
       try {
-        const jsonContent = JSON.parse(content)
-        const result = []
-
-        let contentText = ''
-
-        if (jsonContent.msgtype === 'markdown' && jsonContent.markdown) {
-          if (jsonContent.markdown.text) {
-            contentText = jsonContent.markdown.text
-          } else if (jsonContent.markdown.content) {
-            contentText = jsonContent.markdown.content
-          }
+        const json = JSON.parse(raw)
+        if (json.msgtype === 'markdown' && json.markdown) {
+          return json.markdown.text || json.markdown.content || ''
         }
-        else if (jsonContent.msg_type === 'interactive' && jsonContent.card) {
-          if (jsonContent.card.elements && jsonContent.card.elements[0] && jsonContent.card.elements[0].text) {
-            contentText = jsonContent.card.elements[0].text.content
-          }
+        if (json.msg_type === 'interactive' && json.card) {
+          const el = (json.card.elements || [])[0]
+          if (el && el.text) return el.text.content || ''
+          if (json.card.header && json.card.header.title) return json.card.header.title.content || ''
         }
-
-        if (contentText) {
-          const lines = contentText.split('\n').filter(line => line.trim())
-
-          lines.forEach(line => {
-            if (line.includes('**') || line.trim() === '') {
-              return
-            }
-
-            const colonIndex = line.indexOf(':')
-            if (colonIndex > 0) {
-              const label = line.substring(0, colonIndex).trim()
-              const value = line.substring(colonIndex + 1).trim()
-
-              if (label && value) {
-                result.push({
-                  label: label,
-                  value: value
-                })
-              }
-            }
-          })
-
-          return result.length > 0 ? result : null
-        }
+        if (json.text) return typeof json.text === 'string' ? json.text : JSON.stringify(json.text)
+        if (json.content) return json.content
       } catch (e) {
-        console.log('Trying to parse as plain text format')
+        // 非 JSON，按纯文本处理
       }
+      return raw
+    }
 
-      try {
-        const result = []
-        const lines = content.split('\n').filter(line => line.trim())
+    // 把通知内容渲染为「键:值 / 段落」结构，保留 **粗体**
+    const messageLines = computed(() => {
+      if (!selectedLog.value || !selectedLog.value.notification_content) return []
+      const text = extractContentText(selectedLog.value.notification_content)
+      if (!text) return []
 
-        lines.forEach(line => {
-          if (!line.trim()) {
-            return
-          }
+      const lines = text.split('\n').map(l => l.replace(/\r$/, '')).filter(l => l.trim() !== '')
+      const result = []
+      let lastWasParagraph = false
 
-          const colonIndex = line.indexOf(':')
-          if (colonIndex > 0) {
-            const label = line.substring(0, colonIndex).trim()
-            const value = line.substring(colonIndex + 1).trim()
+      lines.forEach(line => {
+        // 跳过纯分隔符
+        if (/^[-*_]{3,}$/.test(line.trim())) return
+        const kvMatch = line.match(/^([^:：]{1,30})[：:]\s*(.*)$/)
+        if (kvMatch && !/: /.test(kvMatch[1])) {
+          result.push({type: 'kv', key: kvMatch[1].trim(), value: kvMatch[2].trim()})
+          lastWasParagraph = false
+        } else {
+          result.push({type: 'text', text: line.trim()})
+          lastWasParagraph = true
+        }
+      })
 
-            if (label && value && !value.includes("'results':") && !value.includes('"results":')) {
-              result.push({
-                label: label,
-                value: value
-              })
-            }
-          }
-        })
-
-        return result.length > 0 ? result : null
-      } catch (e) {
-        console.error('Parse notification content failed:', e)
-        return null
-      }
+      return result
     })
+
+    // 内联渲染：转义 HTML 后把 **x** 渲染为 <strong>x</strong>
+    const renderInline = (text) => {
+      if (text == null) return ''
+      let s = String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      return s
+    }
+
+    // 状态样式类
+    const statusClass = (log) => {
+      const s = (log.status || '').toUpperCase()
+      if (s === 'SUCCESS' || (log.status_display || '').includes('成功')) return 'is-success'
+      if (s === 'FAILED' || (log.status_display || '').includes('失败')) return 'is-failed'
+      if (s === 'RETRYING' || s === 'SENDING' || (log.status_display || '').includes('重试') || (log.status_display || '').includes('发送中')) return 'is-warning'
+      return 'is-info'
+    }
+
+    // 状态图标
+    const statusIcon = (log) => {
+      const cls = statusClass(log)
+      if (cls === 'is-success') return 'CircleCheckFilled'
+      if (cls === 'is-failed') return 'CircleCloseFilled'
+      if (cls === 'is-warning') return 'WarningFilled'
+      return 'InfoFilled'
+    }
 
     // 组件挂载时获取数据
     onMounted(() => {
@@ -577,7 +598,11 @@ export default {
       searchForm,
       pagination,
       sortParams,
-      parsedNotificationContent,
+      showRaw,
+      messageLines,
+      statusClass,
+      statusIcon,
+      renderInline,
       handleSearch,
       handleReset,
       handleSizeChange,
@@ -628,10 +653,6 @@ export default {
   justify-content: flex-end;
 }
 
-.notification-detail-form :deep(.el-form-item) {
-  margin-bottom: 18px;
-}
-
 .notification-targets {
   display: flex;
   flex-wrap: wrap;
@@ -642,96 +663,220 @@ export default {
   margin: 0;
 }
 
-.notification-content {
-  width: 100%;
-}
-
-.notification-content-parsed {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 20px;
-  border: 1px solid #e4e7ed;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.content-item {
+/* ===== 通知详情弹窗新样式 ===== */
+.ntf-detail {
   display: flex;
-  align-items: flex-start;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f2f5;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.content-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
+/* 状态头卡 */
+.ntf-status-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #909399, #b0b3b8);
 }
 
-.content-item:first-child {
-  padding-top: 0;
+.ntf-status-card.is-success {
+  background: linear-gradient(135deg, #13ce66, #67c23a);
 }
 
-.content-label {
-  font-weight: 600;
-  color: #606266;
-  min-width: 100px;
+.ntf-status-card.is-failed {
+  background: linear-gradient(135deg, #f56c6c, #ff7875);
+}
+
+.ntf-status-card.is-warning {
+  background: linear-gradient(135deg, #e6a23c, #f0b860);
+}
+
+.ntf-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
   flex-shrink: 0;
-  margin-right: 16px;
-  font-size: 14px;
-  line-height: 1.8;
 }
 
-.content-value {
-  color: #303133;
+.ntf-status-main {
   flex: 1;
-  word-break: break-word;
+  min-width: 0;
+}
+
+.ntf-status-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ntf-status-sub {
   font-size: 14px;
-  line-height: 1.8;
+  opacity: 0.95;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.notification-content-raw pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #606266;
-  max-height: 400px;
-  overflow-y: auto;
+.ntf-status-time {
+  text-align: right;
+  flex-shrink: 0;
 }
 
-.notification-content-raw pre::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.notification-content-raw pre::-webkit-scrollbar-thumb {
-  background: #c0c4cc;
-  border-radius: 3px;
-}
-
-.notification-content-raw pre::-webkit-scrollbar-thumb:hover {
-  background: #a8abb2;
-}
-
-.error-message {
-  margin-top: 8px;
-}
-
-.response-info pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
-  max-height: 150px;
-  overflow-y: auto;
-  font-family: monospace;
+.ntf-time-label {
   font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+
+.ntf-time-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 区块卡片 */
+.ntf-section {
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.ntf-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #303133;
+  margin-bottom: 14px;
+  padding-left: 10px;
+  border-left: 3px solid #5046e5;
+  line-height: 1.2;
+}
+
+.ntf-section-title--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 基本信息网格 */
+.ntf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+
+.ntf-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ntf-cell-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.ntf-cell-value {
+  font-size: 14px;
+  color: #303133;
+  word-break: break-word;
+}
+
+/* 消息内容卡片 */
+.ntf-msg-card {
+  background: #f7f8fa;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
+  padding: 14px 16px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.ntf-msg-kv {
+  display: flex;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed #e6e8eb;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.ntf-msg-kv:last-child {
+  border-bottom: none;
+}
+
+.ntf-msg-k {
+  flex: 0 0 120px;
+  color: #606266;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.ntf-msg-v {
+  flex: 1;
+  color: #1f2329;
+  word-break: break-word;
+}
+
+.ntf-msg-p {
+  margin: 6px 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1f2329;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ntf-msg-empty {
+  font-size: 13px;
+  color: #909399;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 原始内容（深色代码块） */
+.ntf-raw pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: 14px 16px;
+  background: #2d2d2d;
+  color: #d4d4d4;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+/* 错误区 */
+.ntf-error-section {
+  border-color: #fbc4c4;
+  background: #fff6f6;
+}
+
+.ntf-error-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #f56c6c;
+  border-left-color: #f56c6c;
+}
+
+.ntf-error {
+  font-size: 13px;
+  color: #c0392b;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .dialog-footer {

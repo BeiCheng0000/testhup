@@ -664,47 +664,37 @@ class NotificationLogDetailSerializer(serializers.ModelSerializer):
         if not obj.recipient_info:
             return []
 
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        def build_recipient(email):
+            # 用 filter().first() 规避同一邮箱存在多个用户时 get() 抛出 MultipleObjectsReturned 导致 500
+            user = User.objects.filter(email=email).first() if email else None
+            if user:
+                name = user.first_name or user.username
+                return {
+                    'name': name,
+                    'email': email,
+                    'display': f"{name}（{email}）"
+                }
+            return {
+                'name': email,
+                'email': email,
+                'display': email
+            }
+
         recipients = []
         if isinstance(obj.recipient_info, list):
             for rec in obj.recipient_info:
+                if not isinstance(rec, dict):
+                    continue
                 email = rec.get('email', '')
-                # 尝试从数据库获取用户的中文姓名
                 if email:
-                    from django.contrib.auth import get_user_model
-                    User = get_user_model()
-                    try:
-                        user = User.objects.get(email=email)
-                        name = user.first_name or user.username
-                        recipients.append({
-                            'name': name,
-                            'email': email,
-                            'display': f"{name}（{email}）"
-                        })
-                    except User.DoesNotExist:
-                        recipients.append({
-                            'name': email,
-                            'email': email,
-                            'display': email
-                        })
+                    recipients.append(build_recipient(email))
         elif isinstance(obj.recipient_info, dict):
             email = obj.recipient_info.get('email', '')
             if email:
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                try:
-                    user = User.objects.get(email=email)
-                    name = user.first_name or user.username
-                    recipients.append({
-                        'name': name,
-                        'email': email,
-                        'display': f"{name}（{email}）"
-                    })
-                except User.DoesNotExist:
-                    recipients.append({
-                        'name': email,
-                        'email': email,
-                        'display': email
-                    })
+                recipients.append(build_recipient(email))
         return recipients
 
     def get_webhook_bot_info_display(self, obj):

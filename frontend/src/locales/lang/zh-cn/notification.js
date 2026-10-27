@@ -108,6 +108,9 @@ export default {
       notificationTarget: '通知对象',
       notificationContent: '通知内容',
       errorMessage: '错误信息',
+      basicInfo: '基本信息',
+      viewRaw: '原始内容',
+      retryCount: '重试次数',
       close: '关闭'
     },
 

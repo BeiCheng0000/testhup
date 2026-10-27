@@ -9,15 +9,42 @@
         @select="handleMenuSelect"
         class="nav-menu"
       >
-        <el-menu-item index="projects">{{ $t('apiTesting.nav.projects') }}</el-menu-item>
-        <el-menu-item index="interfaces">{{ $t('apiTesting.nav.interfaces') }}</el-menu-item>
-        <el-menu-item index="automation">{{ $t('apiTesting.nav.automation') }}</el-menu-item>
-        <el-menu-item index="history">{{ $t('apiTesting.nav.history') }}</el-menu-item>
-        <el-menu-item index="environments">{{ $t('apiTesting.nav.environments') }}</el-menu-item>
-        <el-menu-item index="scheduled-tasks">{{ $t('apiTesting.nav.scheduledTasks') }}</el-menu-item>
-        <el-menu-item index="reports">{{ $t('apiTesting.nav.reports') }}</el-menu-item>
-        <el-menu-item index="notification-logs">{{ $t('apiTesting.nav.notificationLogs') }}</el-menu-item>
-        <el-menu-item index="notification-configs">{{ $t('apiTesting.nav.notificationConfigs') }}</el-menu-item>
+        <el-menu-item index="projects">
+          <el-icon><Folder /></el-icon>
+          <span>{{ $t('apiTesting.nav.projects') }}</span>
+        </el-menu-item>
+        <el-menu-item index="interfaces">
+          <el-icon><Link /></el-icon>
+          <span>{{ $t('apiTesting.nav.interfaces') }}</span>
+        </el-menu-item>
+        <el-menu-item index="automation">
+          <el-icon><VideoPlay /></el-icon>
+          <span>{{ $t('apiTesting.nav.automation') }}</span>
+        </el-menu-item>
+        <el-menu-item index="history">
+          <el-icon><Timer /></el-icon>
+          <span>{{ $t('apiTesting.nav.history') }}</span>
+        </el-menu-item>
+        <el-menu-item index="environments">
+          <el-icon><Location /></el-icon>
+          <span>{{ $t('apiTesting.nav.environments') }}</span>
+        </el-menu-item>
+        <el-menu-item index="scheduled-tasks">
+          <el-icon><AlarmClock /></el-icon>
+          <span>{{ $t('apiTesting.nav.scheduledTasks') }}</span>
+        </el-menu-item>
+        <el-menu-item index="reports">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>{{ $t('apiTesting.nav.reports') }}</span>
+        </el-menu-item>
+        <el-menu-item index="notification-logs">
+          <el-icon><Bell /></el-icon>
+          <span>{{ $t('apiTesting.nav.notificationLogs') }}</span>
+        </el-menu-item>
+        <el-menu-item index="notification-configs">
+          <el-icon><Setting /></el-icon>
+          <span>{{ $t('apiTesting.nav.notificationConfigs') }}</span>
+        </el-menu-item>
       </el-menu>
     </div>
 
@@ -32,6 +59,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { Folder, Link, VideoPlay, Timer, Location, AlarmClock, DataAnalysis, Bell, Setting } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const route = useRoute()

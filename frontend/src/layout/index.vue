@@ -77,7 +77,7 @@
               <span>{{ $t('menu.requestHistory') }}</span>
             </el-menu-item>
             <el-menu-item index="/api-testing/environments">
-              <el-icon><Setting /></el-icon>
+              <el-icon><Location /></el-icon>
               <span>{{ $t('menu.environmentManagement') }}</span>
             </el-menu-item>
             <el-menu-item index="/api-testing/reports">
@@ -324,7 +324,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Monitor, Folder, Document, Flag, Check, Collection, VideoPlay,
   DataAnalysis, ChatDotRound, DocumentCopy, Link, MagicStick,
-  Odometer, Timer, Setting, AlarmClock, Bell, Aim, Edit, Cpu, ArrowDown, Cellphone, Connection, FolderOpened
+  Odometer, Timer, Setting, AlarmClock, Bell, Aim, Edit, Cpu, ArrowDown, Cellphone, Connection, FolderOpened, Location
 } from '@element-plus/icons-vue'
 import logoSvg from '@/assets/images/logo.svg'
 import logoHomePng from '@/assets/images/logo_home.png'

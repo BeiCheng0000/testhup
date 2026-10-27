@@ -108,6 +108,9 @@ export default {
       notificationTarget: 'Notification Target',
       notificationContent: 'Notification Content',
       errorMessage: 'Error Message',
+      basicInfo: 'Basic Info',
+      viewRaw: 'Raw Content',
+      retryCount: 'Retry Count',
       close: 'Close'
     },
 
