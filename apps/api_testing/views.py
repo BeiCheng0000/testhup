@@ -36,7 +36,7 @@ from .serializers import (
     ApiProjectSerializer, ApiCollectionSerializer, ApiRequestSerializer,
     EnvironmentSerializer, RequestHistorySerializer, RequestHistoryListSerializer,
     TestSuiteSerializer, TestSuiteRequestSerializer, TestExecutionSerializer,
-    TestExecutionListSerializer, UserSerializer, ScheduledTaskSerializer, TaskExecutionLogSerializer,
+    UserSerializer, ScheduledTaskSerializer, TaskExecutionLogSerializer,
     NotificationLogSerializer, TaskNotificationSettingSerializer,
     NotificationLogDetailSerializer,
     TaskNotificationSettingDetailSerializer, OperationLogSerializer
@@ -408,7 +408,66 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             user=self.request.user
         )
         instance.delete()
-    
+
+    @action(detail=True, methods=['post'])
+    def copy(self, request, pk=None):
+        """复制接口：在原接口顺序下方生成一份配置完全相同的新接口，名称追加 (n) 后缀。
+
+        - 复制全部字段（集合/描述/类型/方法/URL/头/参数/体/认证/前后脚本/断言）。
+        - 新名称 = 原名称 + "(n)"，n 取最小未被占用的正整数（即该名称第 n 次复制）。
+        - 新接口插入到原接口正下方：原接口 order 不变，其后同级接口 order 整体 +1，
+          新接口 order = 原接口 order + 1。
+        """
+        source = self.get_object()
+
+        # 计算新名称：原名称 + "(n)"，n 为最小未被占用的正整数
+        base_name = source.name
+        n = 1
+        while ApiRequest.objects.filter(collection=source.collection, name=f"{base_name}({n})").exists():
+            n += 1
+        new_name = f"{base_name}({n})"
+
+        # 深拷贝 JSON 字段，避免新旧接口共享同一对象引用
+        new_request = ApiRequest(
+            collection=source.collection,
+            name=new_name,
+            description=source.description,
+            request_type=source.request_type,
+            method=source.method,
+            url=source.url,
+            headers=copy.deepcopy(source.headers),
+            params=copy.deepcopy(source.params),
+            body=copy.deepcopy(source.body),
+            auth=copy.deepcopy(source.auth),
+            pre_request_script=source.pre_request_script,
+            post_request_script=source.post_request_script,
+            assertions=copy.deepcopy(source.assertions),
+            order=source.order + 1,
+            created_by=request.user,
+        )
+        new_request.save()
+
+        # 将原接口之后的同级接口整体后移一位，使新接口恰好位于原接口下方
+        sibling_filter = (
+            {'collection': source.collection}
+            if source.collection
+            else {'collection__isnull': True}
+        )
+        ApiRequest.objects.filter(**sibling_filter).exclude(pk=new_request.pk).filter(
+            order__gt=source.order
+        ).update(order=models.F('order') + 1)
+
+        log_operation(
+            operation_type='create',
+            resource_type='request',
+            resource_id=new_request.id,
+            resource_name=new_request.name,
+            user=request.user
+        )
+
+        serializer = self.get_serializer(new_request)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
     @action(detail=True, methods=['post'])
     def execute(self, request, pk=None):
         """执行API请求"""
@@ -476,11 +535,30 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                     else:
                         body_data = body_content
                 elif body_type in ['form-data', 'x-www-form-urlencoded']:
+                    # 前端传来的请求体是字段对象列表 [{key, value, enabled, ...}]，
+                    # 必须转换为 {key: value} 字典并以 data= 发送（form / urlencoded），
+                    # 不能当 JSON 发送，否则服务端解析不到表单字段。例如 OAuth2 令牌端点
+                    # /oauth2/token 会因缺少 client_id/client_secret 直接返回 401。
                     if isinstance(body_content, list):
+                        kv = {}
+                        for item in body_content:
+                            if not isinstance(item, dict):
+                                continue
+                            if not item.get('enabled', True):
+                                continue
+                            key = item.get('key', '')
+                            if not key:
+                                continue
+                            value = item.get('value', '')
+                            if not isinstance(value, str):
+                                value = '' if value is None else str(value)
+                            value = self._replace_variables(value, variables)
+                            value = resolver.resolve(value)
+                            kv[key] = value
+                        body_data = kv
+                    else:
                         body_data = self._replace_variables_in_dict(body_content, variables)
                         body_data = self._resolve_variables_in_dict(body_data, resolver)
-                    else:
-                        body_data = body_content
                 else:
                     body_data = body_content
             
@@ -488,17 +566,7 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             start_time = time.time()
 
             # 根据请求体类型决定使用 data 还是 json 参数
-            if body_type == 'raw':
-                # raw 类型使用 data 参数，发送原始字符串
-                response = requests.request(
-                    method=request_method,
-                    url=url,
-                    headers=headers,
-                    params=params,
-                    data=body_data,
-                    timeout=30
-                )
-            else:
+            if body_type == 'json':
                 # json 类型使用 json 参数，自动序列化
                 response = requests.request(
                     method=request_method,
@@ -506,6 +574,18 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                     headers=headers,
                     params=params,
                     json=body_data,
+                    timeout=30
+                )
+            else:
+                # raw 字符串 / form-data / x-www-form-urlencoded 均通过 data 发送；
+                # form 类型的 body_data 已转换为 {key: value} 字典，
+                # requests 会自动设置 application/x-www-form-urlencoded
+                response = requests.request(
+                    method=request_method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    data=body_data,
                     timeout=30
                 )
             end_time = time.time()
@@ -603,7 +683,9 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                 replacement = str(value.get('currentValue', '') or value.get('initialValue', ''))
             else:
                 replacement = str(value) if value is not None else ''
+            # 兼容单花括号 {key} 写法：先替换双花括号 {{key}}，再替换单花括号 {key}
             result = result.replace(f'{{{{{key}}}}}', replacement)
+            result = result.replace(f'{{{key}}}', replacement)
         return result
     
     def _replace_variables_in_dict(self, data, variables):
@@ -795,7 +877,9 @@ def _replace_vars(text, variables):
             replacement = str(value.get('currentValue', '') or value.get('initialValue', ''))
         else:
             replacement = str(value) if value is not None else ''
+        # 兼容单花括号 {key} 写法：先替换双花括号 {{key}}，再替换单花括号 {key}
         result = result.replace(f'{{{{{key}}}}}', replacement)
+        result = result.replace(f'{{{key}}}', replacement)
     return result
 
 
@@ -1223,7 +1307,9 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                 replacement = str(value.get('currentValue', '') or value.get('initialValue', ''))
             else:
                 replacement = str(value) if value is not None else ''
+            # 兼容单花括号 {key} 写法：先替换双花括号 {{key}}，再替换单花括号 {key}
             result = result.replace(f'{{{{{key}}}}}', replacement)
+            result = result.replace(f'{{{key}}}', replacement)
         return result
     
     def _replace_variables_in_dict(self, data, variables):
@@ -1293,34 +1379,14 @@ class TestExecutionViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['status', 'test_suite']
     ordering = ['-created_at']
     pagination_class = StandardPagination
-
-    def get_serializer_class(self):
-        """列表查询用轻量级扁平序列化器，详情用完整序列化器"""
-        if self.action == 'list':
-            return TestExecutionListSerializer
-        return TestExecutionSerializer
-
+    
     def get_queryset(self):
         user = self.request.user
-        # 使用 Exists 子查询替代 JOIN + DISTINCT，避免重复行和 DISTINCT 开销
-        user_project_exists = ApiProject.objects.filter(
-            models.Q(owner=user) | models.Q(members=user)
-        ).filter(id=OuterRef('test_suite__project_id'))
-
-        qs = TestExecution.objects.filter(
-            Exists(user_project_exists)
-        ).select_related(
-            # 列表序列化器只需这几个关联字段（避免嵌套 TestSuite/User 的 N+1）
-            'test_suite', 'test_suite__project', 'executed_by'
-        ).prefetch_related(
-            'test_suite__testsuiterequest_set'
-        )
-
-        # 列表接口不加载 results（最重的 JSON 字段）
-        if self.action == 'list':
-            qs = qs.defer('results')
-
-        return qs
+        return TestExecution.objects.filter(
+            test_suite__project__in=ApiProject.objects.filter(
+                models.Q(owner=user) | models.Q(members=user)
+            )
+        ).distinct()
     
     @action(detail=True, methods=['post'], url_path='generate-allure-report')
     def generate_allure_report(self, request, pk=None):

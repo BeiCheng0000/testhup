@@ -712,7 +712,11 @@ def _replace_variables(text, variables):
             replacement = str(value.get('currentValue', '') or value.get('initialValue', ''))
         else:
             replacement = str(value) if value is not None else ''
+        # 兼容单花括号 {key} 写法（如 URL 路径参数 /path/{assistantCode}）：
+        # 必须先替换双花括号 {{key}}，再替换单花括号 {key}，
+        # 否则 {{key}} 内部的 {key} 会被单括号规则先命中，导致外层花括号残留。
         result = result.replace(f'{{{{{key}}}}}', replacement)
+        result = result.replace(f'{{{key}}}', replacement)
     return result
 
 

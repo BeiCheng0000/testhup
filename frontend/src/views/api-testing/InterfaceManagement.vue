@@ -865,6 +865,7 @@
       <li @click="addRequest">{{ $t('apiTesting.interface.contextMenu.addRequest') }}</li>
       <li @click="addCollection">{{ $t('apiTesting.interface.contextMenu.addSubCollection') }}</li>
       <li @click="editNode">{{ $t('apiTesting.interface.contextMenu.edit') }}</li>
+      <li v-if="rightClickedNode && rightClickedNode.type === 'request'" @click="copyRequest">{{ $t('apiTesting.common.copy') }}</li>
       <li @click="deleteNode">{{ $t('apiTesting.interface.contextMenu.delete') }}</li>
     </ul>
 
@@ -1553,6 +1554,37 @@ const deleteNode = () => {
     // 取消删除
     showContextMenu.value = false
   })
+}
+
+const copyRequest = async () => {
+  if (!rightClickedNode.value) return
+
+  const node = rightClickedNode.value
+  if (!node || node.type !== 'request') {
+    ElMessage.warning('只能复制接口')
+    showContextMenu.value = false
+    return
+  }
+
+  try {
+    const response = await api.post(`/api-testing/requests/${node.id}/copy/`)
+    const newRequest = response.data
+    ElMessage.success(`已复制为「${newRequest.name}」`)
+
+    // 刷新树，确保展开其所属集合并自动选中新接口
+    await loadCollections(selectedProject.value)
+    if (node.collection) {
+      if (!expandedKeys.value.includes(node.collection)) {
+        expandedKeys.value.push(node.collection)
+      }
+    }
+    await onNodeClick({ id: newRequest.id, type: 'request' })
+    showContextMenu.value = false
+  } catch (error) {
+    ElMessage.error('复制失败')
+    console.error('复制失败:', error)
+    showContextMenu.value = false
+  }
 }
 
 const saveCollectionName = async () => {
