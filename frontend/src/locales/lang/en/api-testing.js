@@ -233,6 +233,10 @@ export default {
     clear: 'Clear',
     // Response
     response: 'Response',
+    actualRequest: 'Actual Request',
+    noHeaders: 'No headers',
+    noParams: 'No params',
+    noBody: 'No body',
     responseBody: 'Body',
     responseHeaders: 'Headers',
     assertionResults: 'Assertion Results',

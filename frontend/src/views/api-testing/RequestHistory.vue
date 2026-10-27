@@ -111,7 +111,7 @@
           <el-tab-pane :label="$t('apiTesting.history.requestInfo')" name="request">
             <div class="detail-section">
               <h4>{{ $t('apiTesting.history.requestUrl') }}</h4>
-              <el-input v-model="selectedHistory.request_data.url" readonly />
+              <el-input :value="historyRequestUrl" readonly />
 
               <h4>{{ $t('apiTesting.history.requestHeaders') }}</h4>
               <el-table :data="formatHeaders(selectedHistory.request_data.headers)" style="width: 100%">
@@ -119,12 +119,12 @@
                 <el-table-column prop="value" label="Value" />
               </el-table>
 
-              <h4 v-if="selectedHistory.request_data.params && Object.keys(selectedHistory.request_data.params).length > 0">
+              <h4 v-if="Object.keys(historyRequestParams).length > 0">
                 {{ $t('apiTesting.history.requestParams') }}
               </h4>
               <el-table
-                v-if="selectedHistory.request_data.params && Object.keys(selectedHistory.request_data.params).length > 0"
-                :data="formatHeaders(selectedHistory.request_data.params)"
+                v-if="Object.keys(historyRequestParams).length > 0"
+                :data="formatHeaders(historyRequestParams)"
                 style="width: 100%"
               >
                 <el-table-column prop="key" label="Key" width="200" />
@@ -132,9 +132,7 @@
               </el-table>
 
               <h4 v-if="selectedHistory.request_data.body">{{ $t('apiTesting.history.requestBody') }}</h4>
-              <pre v-if="selectedHistory.request_data.body" class="json-content">
-                {{ JSON.stringify(selectedHistory.request_data.body, null, 2) }}
-              </pre>
+              <pre v-if="selectedHistory.request_data.body" class="json-content">{{ JSON.stringify(selectedHistory.request_data.body, null, 2) }}</pre>
             </div>
           </el-tab-pane>
 
@@ -322,6 +320,40 @@ const formatHeaders = (headers) => {
     value: headers[key]
   }))
 }
+
+// 将 URL 中的查询字符串解析为对象，并返回去掉查询的基础路径
+const splitUrlQuery = (url) => {
+  if (!url || typeof url !== 'string') return { baseUrl: url || '', queryParams: {} }
+  const idx = url.indexOf('?')
+  if (idx === -1) return { baseUrl: url, queryParams: {} }
+  const baseUrl = url.slice(0, idx)
+  const queryStr = url.slice(idx + 1)
+  const queryParams = {}
+  if (queryStr) {
+    queryStr.split('&').forEach((pair) => {
+      if (!pair) return
+      const eq = pair.indexOf('=')
+      const rawKey = eq === -1 ? pair : pair.slice(0, eq)
+      const rawVal = eq === -1 ? '' : pair.slice(eq + 1)
+      try {
+        queryParams[decodeURIComponent(rawKey)] = decodeURIComponent(rawVal)
+      } catch (e) {
+        queryParams[rawKey] = rawVal
+      }
+    })
+  }
+  return { baseUrl, queryParams }
+}
+
+// 请求详情展示：URL 只显示基础路径，查询参数（URL 内 + 显式 params）合并到 Params 表格
+const historyRequestUrl = computed(() =>
+  splitUrlQuery(selectedHistory.value?.request_data?.url).baseUrl
+)
+const historyRequestParams = computed(() => {
+  const { queryParams } = splitUrlQuery(selectedHistory.value?.request_data?.url)
+  const explicit = selectedHistory.value?.request_data?.params || {}
+  return { ...queryParams, ...explicit }
+})
 
 const loadHistory = async () => {
   loading.value = true

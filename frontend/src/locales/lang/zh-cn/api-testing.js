@@ -280,6 +280,10 @@ export default {
     clear: '清除',
     // 响应
     response: '响应',
+    actualRequest: '实际请求',
+    noHeaders: '无请求头',
+    noParams: '无请求参数',
+    noBody: '无请求体',
     responseBody: 'Body',
     responseHeaders: 'Headers',
     assertionResults: '断言结果',

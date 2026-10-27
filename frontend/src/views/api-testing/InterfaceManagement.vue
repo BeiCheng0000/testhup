@@ -141,9 +141,10 @@
                 v-model="requestUrl"
                 :placeholder="$t('apiTesting.interface.inputRequestUrl')"
                 class="url-input"
+                @blur="extractQueryParamsFromUrl"
               >
                 <template #prepend>
-                  <el-select v-model="selectedEnvironment" :placeholder="$t('apiTesting.interface.environment')" class="env-select">
+                  <el-select v-model="selectedEnvironment" :placeholder="$t('apiTesting.interface.environment')" class="env-select" @change="onEnvironmentChange">
                     <el-option :label="$t('apiTesting.common.noEnvironment')" :value="null" />
                     <el-option
                       v-for="env in environments"
@@ -674,19 +675,79 @@
             </template>
           </el-tabs>
 
-          <!-- 响应区域 -->
-          <div v-if="response" class="response-section">
-            <div class="response-header">
-              <h3>{{ $t('apiTesting.interface.response') }}</h3>
-              <div class="response-info">
-                <el-tag :type="getStatusType(response.status_code)">
-                  {{ response.status_code }}
+          <!-- 实际请求：本次真正发出的请求（默认折叠，显示在响应上方） -->
+          <div v-if="response" class="result-panel" :class="{ 'is-collapsed': !actualRequestExpanded }">
+            <div class="result-panel-header" @click="actualRequestExpanded = !actualRequestExpanded">
+              <div class="panel-title">
+                <el-icon class="panel-arrow" :class="{ 'is-expanded': actualRequestExpanded }">
+                  <ArrowRight />
+                </el-icon>
+                <span class="panel-name">{{ $t('apiTesting.interface.actualRequest') }}</span>
+              </div>
+              <div class="panel-meta">
+                <el-tag size="small" effect="dark" :type="methodTagType(actualRequestData?.method)">
+                  {{ actualRequestData?.method }}
                 </el-tag>
-                <span class="response-time">{{ response.response_time ? response.response_time.toFixed(0) : 0 }}ms</span>
+                <span class="panel-url" :title="actualRequestUrl">{{ actualRequestUrl }}</span>
               </div>
             </div>
+            <el-tabs v-show="actualRequestExpanded" v-model="actualRequestActiveTab" class="panel-tabs">
+              <el-tab-pane label="Headers" name="headers">
+                <div class="kv-list">
+                  <div class="kv-head">
+                    <span>Key</span>
+                    <span>Value</span>
+                  </div>
+                  <div v-for="(value, key) in (actualRequestData?.headers || {})" :key="key" class="kv-row">
+                    <span class="kv-key">{{ key }}</span>
+                    <span class="kv-value" :class="{ 'is-empty': isEmptyValue(value) }">{{ isEmptyValue(value) ? '—' : value }}</span>
+                  </div>
+                  <div v-if="!hasEntries(actualRequestData?.headers)" class="kv-empty">
+                    {{ $t('apiTesting.interface.noHeaders') }}
+                  </div>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="Params" name="params">
+                <div class="kv-list">
+                  <div class="kv-head">
+                    <span>Key</span>
+                    <span>Value</span>
+                  </div>
+                  <div v-for="(value, key) in (actualRequestParams || {})" :key="key" class="kv-row">
+                    <span class="kv-key">{{ key }}</span>
+                    <span class="kv-value" :class="{ 'is-empty': isEmptyValue(value) }">{{ isEmptyValue(value) ? '—' : value }}</span>
+                  </div>
+                  <div v-if="!hasEntries(actualRequestParams)" class="kv-empty">
+                    {{ $t('apiTesting.interface.noParams') }}
+                  </div>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="Body" name="body">
+                <div v-if="hasEntries(actualRequestData?.body)" class="code-block">
+                  <pre>{{ formatRequestPart(actualRequestData?.body) }}</pre>
+                </div>
+                <div v-else class="kv-empty">{{ $t('apiTesting.interface.noBody') }}</div>
+              </el-tab-pane>
+            </el-tabs>
+          </div>
 
-            <el-tabs v-model="responseActiveTab">
+          <!-- 响应区域（可折叠，默认展开） -->
+          <div v-if="response" class="result-panel" :class="{ 'is-collapsed': !responseExpanded }">
+            <div class="result-panel-header" @click="responseExpanded = !responseExpanded">
+              <div class="panel-title">
+                <el-icon class="panel-arrow" :class="{ 'is-expanded': responseExpanded }">
+                  <ArrowRight />
+                </el-icon>
+                <span class="panel-name">{{ $t('apiTesting.interface.response') }}</span>
+              </div>
+              <div class="panel-meta">
+                <el-tag size="small" effect="dark" :type="getStatusType(response.status_code)">
+                  {{ response.status_code }}
+                </el-tag>
+                <span class="panel-time">{{ response.response_time ? response.response_time.toFixed(0) : 0 }}ms</span>
+              </div>
+            </div>
+            <el-tabs v-show="responseExpanded" v-model="responseActiveTab" class="panel-tabs">
               <el-tab-pane label="Body" name="body">
                 <div class="response-body">
                   <div class="response-actions">
@@ -991,7 +1052,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Folder, Document, MagicStick, Search, Close } from '@element-plus/icons-vue'
+import { Plus, Folder, Document, MagicStick, Search, Close, ArrowRight } from '@element-plus/icons-vue'
 import api from '@/utils/api'
 import KeyValueEditor from './components/KeyValueEditor.vue'
 import DataFactorySelector from '@/components/DataFactorySelector.vue'
@@ -1012,12 +1073,57 @@ const collections = ref([])
 const flatCollections = ref([])
 const environments = ref([])
 const selectedEnvironment = ref(null)
+
+// —— 前端缓存：环境与项目的默认选择（localStorage）——
+// 环境按项目分别记忆，切换项目/离开页面后再回来都能恢复到该项目上次选中的环境
+const ENV_CACHE_KEY = 'api-testing:env-by-project'
+const PROJECT_CACHE_KEY = 'api-testing:selected-project'
+
+const loadEnvCacheMap = () => {
+  try {
+    return JSON.parse(localStorage.getItem(ENV_CACHE_KEY) || '{}') || {}
+  } catch (e) {
+    return {}
+  }
+}
+const getCachedEnv = (projectId) => {
+  const map = loadEnvCacheMap()
+  return Object.prototype.hasOwnProperty.call(map, projectId) ? map[projectId] : null
+}
+const setCachedEnv = (projectId, envId) => {
+  if (projectId == null) return
+  const map = loadEnvCacheMap()
+  if (envId == null) delete map[projectId]
+  else map[projectId] = envId
+  try {
+    localStorage.setItem(ENV_CACHE_KEY, JSON.stringify(map))
+  } catch (e) {}
+}
+const getCachedProject = () => {
+  try {
+    const v = localStorage.getItem(PROJECT_CACHE_KEY)
+    return v == null ? null : v
+  } catch (e) {
+    return null
+  }
+}
+const setCachedProject = (projectId) => {
+  if (projectId == null) return
+  try {
+    localStorage.setItem(PROJECT_CACHE_KEY, String(projectId))
+  } catch (e) {}
+}
+
 const selectedRequest = ref(null)
 const response = ref(null)
 const sending = ref(false)
 const saving = ref(false)
 const activeTab = ref('params')
 const responseActiveTab = ref('body')
+// 执行结果面板折叠状态：实际请求默认折叠，响应默认展开
+const actualRequestExpanded = ref(false)
+const responseExpanded = ref(true)
+const actualRequestActiveTab = ref('headers')
 // Tests 脚本（请求后脚本）执行结果展示
 const testResults = ref([])
 const scriptLogs = ref([])
@@ -1121,7 +1227,9 @@ const selectSearchResult = (item) => {
 const onProjectChange = async (projectId) => {
   if (!projectId) return
 
-  // 切换项目时清空环境选择，让 loadEnvironments 自动选择新项目的第一个环境
+  // 记住当前选中的项目，下次进入接口管理页仍停留在该项目
+  setCachedProject(projectId)
+  // 切换项目时先清空当前请求与环境，再由 loadEnvironments 按该项目缓存恢复环境
   selectedEnvironment.value = null
   selectedRequest.value = null
   response.value = null
@@ -1135,13 +1243,25 @@ const onProjectChange = async (projectId) => {
   }
 }
 
+// 用户手动切换环境时，按项目缓存该选择
+const onEnvironmentChange = (envId) => {
+  if (selectedProject.value != null) {
+    setCachedEnv(selectedProject.value, envId)
+  }
+}
+
 const loadProjects = async () => {
   try {
     const response = await api.get('/api-testing/projects/')
     // 后端可能返回分页格式 { results: [...] } 或直接返回数组
     projects.value = response.data.results || response.data || []
     if (projects.value.length > 0) {
-      selectedProject.value = projects.value[0].id
+      // 优先恢复上次选中的项目，项目不存在时回退到第一个
+      const cachedProjectId = getCachedProject()
+      const matched = cachedProjectId != null
+        ? projects.value.find(p => String(p.id) === String(cachedProjectId))
+        : null
+      selectedProject.value = matched ? matched.id : projects.value[0].id
       await loadCollections(selectedProject.value)
       await loadEnvironments(selectedProject.value)
     }
@@ -1193,9 +1313,13 @@ const loadEnvironments = async (projectId) => {
     })
     // 后端可能返回分页格式 { results: [...] } 或直接返回数组
     environments.value = response.data.results || response.data || []
-    // 如果项目有配置环境，默认选择第一个
-    if (environments.value.length > 0 && !selectedEnvironment.value) {
-      selectedEnvironment.value = environments.value[0].id
+    if (environments.value.length > 0) {
+      // 优先恢复该项目上次选择的环境，环境不存在时回退到第一个
+      const cached = getCachedEnv(projectId)
+      const exists = cached != null && environments.value.some(e => e.id === cached)
+      selectedEnvironment.value = exists ? cached : environments.value[0].id
+    } else {
+      selectedEnvironment.value = null
     }
   } catch (error) {
     ElMessage.error('加载环境失败')
@@ -1379,6 +1503,8 @@ const onNodeClick = async (data) => {
 
       response.value = null
       selectedRequest.value = requestData
+      // 加载接口后，把 URL 中的查询参数归并到 Params，保持 URL 干净、参数单独展示
+      extractQueryParamsFromUrl()
     } catch (error) {
       ElMessage.error('加载请求失败')
       console.error('加载请求失败:', error)
@@ -1743,6 +1869,102 @@ const getStatusType = (status) => {
   return 'info'
 }
 
+// 实际请求：后端记录的本次真正发出的请求数据（已替换变量、已解析脚本后的最终值）
+const actualRequestData = computed(() => response.value?.request_data || null)
+
+// 判断某个请求片段（headers/params/body）是否有内容
+const hasEntries = (val) => {
+  if (val === null || val === undefined || val === '') return false
+  if (Array.isArray(val)) return val.length > 0
+  if (typeof val === 'object') return Object.keys(val).length > 0
+  return true
+}
+
+// 单个键值对的值是否为空（null/undefined/空字符串），为空时展示占位符
+const isEmptyValue = (val) => val === null || val === undefined || val === ''
+
+// 格式化请求片段为可展示文本（对象/数组 → 缩进 JSON；JSON 字符串 → 美化；其余原样）
+const formatRequestPart = (val) => {
+  if (val === null || val === undefined || val === '') return ''
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val)
+      return typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : val
+    } catch (e) {
+      return val
+    }
+  }
+  try {
+    return JSON.stringify(val, null, 2)
+  } catch (e) {
+    return String(val)
+  }
+}
+
+// 请求方法标签配色
+const methodTagType = (method) => {
+  switch ((method || '').toUpperCase()) {
+    case 'GET': return 'success'
+    case 'POST': return 'primary'
+    case 'PUT':
+    case 'PATCH': return 'warning'
+    case 'DELETE': return 'danger'
+    default: return 'info'
+  }
+}
+
+// 将 URL 中的查询字符串解析为对象 { key: value }，并返回去掉查询的基础路径
+const splitUrlQuery = (url) => {
+  if (!url || typeof url !== 'string') return { baseUrl: url || '', queryParams: {} }
+  const idx = url.indexOf('?')
+  if (idx === -1) return { baseUrl: url, queryParams: {} }
+  const baseUrl = url.slice(0, idx)
+  const queryStr = url.slice(idx + 1)
+  const queryParams = {}
+  if (queryStr) {
+    queryStr.split('&').forEach((pair) => {
+      if (!pair) return
+      const eq = pair.indexOf('=')
+      const rawKey = eq === -1 ? pair : pair.slice(0, eq)
+      const rawVal = eq === -1 ? '' : pair.slice(eq + 1)
+      try {
+        queryParams[decodeURIComponent(rawKey)] = decodeURIComponent(rawVal)
+      } catch (e) {
+        queryParams[rawKey] = rawVal
+      }
+    })
+  }
+  return { baseUrl, queryParams }
+}
+
+// 实际请求展示：URL 只显示基础路径（去掉 ? 查询），查询参数并入 Params 一起展示
+const actualRequestUrl = computed(() => splitUrlQuery(actualRequestData.value?.url).baseUrl)
+const actualRequestParams = computed(() => {
+  const { queryParams } = splitUrlQuery(actualRequestData.value?.url)
+  const explicit = actualRequestData.value?.params || {}
+  // URL 内查询优先，显式 params 覆盖（与请求实际发送行为一致）
+  return { ...queryParams, ...explicit }
+})
+
+// 编辑器：把 URL 中的查询参数抽取进 params（与已有 key 去重），并保持 URL 干净
+const extractQueryParamsFromUrl = () => {
+  if (!selectedRequest.value) return
+  const { baseUrl, queryParams } = splitUrlQuery(selectedRequest.value.url || '')
+  if (!Object.keys(queryParams).length) return
+  const params = Array.isArray(selectedRequest.value.params)
+    ? [...selectedRequest.value.params]
+    : []
+  const existingKeys = new Set(params.map((p) => (p && p.key) || ''))
+  Object.entries(queryParams).forEach(([k, v]) => {
+    if (k && !existingKeys.has(k)) {
+      params.push({ enabled: true, key: k, value: v, description: '', type: 'text' })
+      existingKeys.add(k)
+    }
+  })
+  selectedRequest.value.params = params
+  selectedRequest.value.url = baseUrl
+}
+
 const sendRequest = async () => {
   if (!selectedRequest.value || !selectedRequest.value.url) {
     ElMessage.warning('请填写请求URL')
@@ -1819,6 +2041,10 @@ const sendRequest = async () => {
 
     const apiResponse = await api.post(`/api-testing/requests/${selectedRequest.value.id}/execute/`, requestData)
     response.value = apiResponse.data
+    // 每次执行后：实际请求保持折叠，响应自动展开，便于直接查看结果
+    actualRequestExpanded.value = false
+    responseExpanded.value = true
+    actualRequestActiveTab.value = 'headers'
 
     // 执行请求后脚本（Tests）：提取响应数据并写回环境变量，供后续接口复用
     await runPostRequestScript(apiResponse.data)
@@ -3648,61 +3874,209 @@ const useLocalVariableCategories = () => {
 }
 
 /* 响应区域 */
-.response-section {
+/* 执行结果面板（实际请求 / 响应），均可折叠 */
+.result-panel {
   background: white;
   border: 1px solid #e9ecef;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  margin-bottom: 16px;
 }
 
-.response-section:hover {
+.result-panel:last-child {
+  margin-bottom: 0;
+}
+
+.result-panel:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: #dcdfe6;
 }
 
-.response-header {
-  padding: 20px 24px;
+.result-panel-header {
+  padding: 14px 20px;
   background: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
 }
 
-.response-header h3 {
-  margin: 0;
-  font-size: 16px;
+.result-panel-header:hover {
+  background: #f1f3f5;
+}
+
+/* 折叠态去掉分隔线，整体更紧凑 */
+.result-panel.is-collapsed .result-panel-header {
+  border-bottom: none;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.panel-arrow {
+  font-size: 14px;
+  color: #909399;
+  transition: transform 0.2s ease;
+}
+
+.panel-arrow.is-expanded {
+  transform: rotate(90deg);
+}
+
+.panel-name {
+  font-size: 15px;
   font-weight: 600;
   color: #303133;
 }
 
-.response-info {
+.panel-meta {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
-.response-time {
-  font-size: 14px;
+/* 实际请求 URL：单行省略，完整值通过 title 悬浮查看 */
+.panel-url {
+  font-size: 13px;
+  color: #606266;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: #eef1f5;
+  padding: 4px 10px;
+  border-radius: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-time {
+  font-size: 13px;
   color: #606266;
   font-weight: 500;
   background: #e9ecef;
   padding: 4px 12px;
   border-radius: 16px;
+  flex-shrink: 0;
 }
 
-/* 响应体 */
+/* 面板内标签页内容留白 */
+.panel-tabs {
+  padding: 0 16px 16px;
+}
+
+.panel-tabs > .el-tabs__header {
+  margin: 0 0 12px;
+}
+
+/* 键值对列表（实际请求 Headers / Params） */
+/* 键值对表格：key 列按内容自适应（上限 240px），value 紧跟其后，左对齐 */
+.kv-list {
+  display: grid;
+  grid-template-columns: fit-content(240px) minmax(0, 1fr);
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 320px;
+  font-size: 13px;
+}
+
+/* 表头与行都用 display:contents，让内部单元格直接参与外层网格，保证列对齐 */
+.kv-head,
+.kv-row {
+  display: contents;
+}
+
+.kv-head > span,
+.kv-row > span {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f0f2f5;
+  min-width: 0;
+}
+
+.kv-head > span {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7f8fa;
+  font-size: 12px;
+  font-weight: 600;
+  color: #909399;
+  letter-spacing: 0.02em;
+}
+
+.kv-row:last-child > span {
+  border-bottom: none;
+}
+
+.kv-key {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-weight: 600;
+  color: #374151;
+  word-break: break-all;
+}
+
+.kv-value {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  color: #111827;
+  word-break: break-all;
+}
+
+.kv-value.is-empty {
+  color: #c0c4cc;
+  font-style: italic;
+}
+
+.kv-empty {
+  grid-column: 1 / -1;
+  padding: 20px;
+  text-align: center;
+  color: #909399;
+  font-size: 13px;
+}
+
+/* 代码块（实际请求 Body） */
+.code-block {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.code-block pre {
+  margin: 0;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #303133;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 响应体：外间距已由面板统一控制，这里收紧内边距与高度 */
 .response-body {
-  padding: 24px;
-  min-height: 400px;
-  max-height: 600px;
+  padding: 16px;
+  min-height: 200px;
+  max-height: 520px;
   overflow: auto;
   background: #f8f9fa;
-  border-radius: 10px;
-  margin: 20px;
+  border-radius: 8px;
   border: 1px solid #e9ecef;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .response-actions {
@@ -3745,12 +4119,11 @@ const useLocalVariableCategories = () => {
 
 /* 响应头 */
 .response-headers {
-  padding: 24px;
+  padding: 8px 12px;
   background: #f8f9fa;
-  border-radius: 10px;
-  margin: 20px;
+  border-radius: 8px;
   border: 1px solid #e9ecef;
-  max-height: 80vh;
+  max-height: 380px;
   overflow: auto;
 }
 
