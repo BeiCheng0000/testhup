@@ -35,6 +35,7 @@ export default {
     environmentManagement: '环境管理',
     scheduledTasks: '定时任务',
     notificationList: '通知列表',
+    aiCases: 'AI 接口用例',
 
     // UI自动化
     elementManagement: '元素管理',

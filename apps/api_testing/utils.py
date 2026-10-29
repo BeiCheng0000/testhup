@@ -1,5 +1,6 @@
 
 
+import base64
 import json
 import logging
 import re
@@ -75,7 +76,18 @@ def execute_assertions(response, assertions):
                     from jsonpath_ng import parse
                     matches = parse(json_path).find(response_json)
                     actual = matches[0].value if matches else None
-                    passed = str(actual) == str(expected_val)
+                    if not matches:
+                        # 路径写错时给出可定位的原因，而不是笼统的「缺少期望/实际信息」
+                        if isinstance(response_json, dict):
+                            top_keys = ', '.join(list(response_json)[:8])
+                        else:
+                            top_keys = type(response_json).__name__
+                        result['error'] = f'路径 {json_path} 未匹配到，响应顶层字段：{top_keys}'
+                    if expected_val is None:
+                        # 没有期望值时，只校验该路径存在且非空（用于「字段存在」类断言）
+                        passed = bool(matches) and actual not in (None, '', [], {})
+                    else:
+                        passed = str(actual) == str(expected_val)
 
                 except json.JSONDecodeError as e:
                     actual = None
@@ -228,34 +240,27 @@ def execute_test_suite(test_suite, environment, executed_by):
             api_request = suite_request.request
 
             try:
-                # 解析环境变量
-                variables = {}
-                if environment:
-                    variables.update(environment.variables)
+                # 变量全部来自环境：缺失时把该条记为失败并继续执行后续请求
+                parts, missing = prepare_request_parts(api_request, environment, resolver)
+                if missing:
+                    failed_count += 1
+                    results.append({
+                        'name': api_request.name,
+                        'method': api_request.method,
+                        'url': api_request.url,
+                        'passed': False,
+                        'status_code': None,
+                        'response_time': 0,
+                        'error': ('环境「%s」缺少变量：%s。变量必须全部来自环境'
+                                  % (environment.name if environment else '未指定',
+                                     '、'.join('{{%s}}' % m for m in missing))),
+                    })
+                    continue
 
-                # 替换URL中的变量并自动拼接host域名
-                url = resolve_url_with_host(api_request.url, variables, resolver)
-
-                # 准备请求头
-                headers = {}
-                if isinstance(api_request.headers, list):
-                    for header_item in api_request.headers:
-                        if header_item.get('enabled', True) and header_item.get('key'):
-                            key = header_item['key']
-                            value = _replace_variables(str(header_item.get('value', '')), variables)
-                            value = resolver.resolve(value)
-                            headers[key] = value
-                else:
-                    headers = api_request.headers.copy()
-                    for key, value in headers.items():
-                        headers[key] = _replace_variables(str(value), variables)
-                        headers[key] = resolver.resolve(headers[key])
-
-                # 准备请求参数
-                params = api_request.params.copy() if api_request.params else {}
-                for key, value in params.items():
-                    params[key] = _replace_variables(str(value), variables)
-                    params[key] = resolver.resolve(params[key])
+                variables = parts['variables']
+                url = parts['url']
+                headers = parts['headers']
+                params = parts['params']
 
                 # 准备请求体
                 body_data = None
@@ -270,7 +275,7 @@ def execute_test_suite(test_suite, environment, executed_by):
                         body_data = _resolve_variables_in_dict(body_data, resolver)
                     elif body_type == 'form-data':
                         body_data = {}
-                        for item in api_request.body.get('data', []):
+                        for item in iter_form_items(api_request.body.get('data', [])):
                             if item.get('enabled', True):
                                 key = item.get('key', '')
                                 value = item.get('value', '')
@@ -279,7 +284,7 @@ def execute_test_suite(test_suite, environment, executed_by):
                                 body_data[key] = value
                     elif body_type == 'x-www-form-urlencoded':
                         body_data = {}
-                        for item in api_request.body.get('data', []):
+                        for item in iter_form_items(api_request.body.get('data', [])):
                             if item.get('enabled', True):
                                 key = item.get('key', '')
                                 value = item.get('value', '')
@@ -462,8 +467,12 @@ def execute_test_suite(test_suite, environment, executed_by):
         }
 
 
-def execute_api_request(api_request, environment, executed_by):
-    """执行单个API请求并返回结果"""
+def execute_api_request(api_request, environment, executed_by, save_history=True):
+    """执行单个API请求并返回结果
+
+    save_history=False 时请求照常发出，但不写请求历史，也不要求
+    api_request 已落库（供「AI 自检试跑」这类内部调用使用）。
+    """
     import requests
     import time
 
@@ -471,38 +480,29 @@ def execute_api_request(api_request, environment, executed_by):
         # 创建变量解析器
         resolver = VariableResolver()
 
-        # 解析环境变量
-        variables = {}
-        if environment:
-            variables.update(environment.variables)
+        # 变量全部来自环境：先统一解析（含变量间引用），缺失则直接中断，避免把 {{xxx}} 原样发出去
+        parts, missing = prepare_request_parts(api_request, environment, resolver)
+        if missing:
+            return {
+                'success': False,
+                'error': (f'环境「{environment.name if environment else "未指定"}」缺少变量：'
+                          + '、'.join('{{%s}}' % m for m in missing)
+                          + '。变量必须全部来自环境，请在环境管理中补充后重试。'),
+                'missing_variables': missing,
+                'status_code': None,
+                'response_time': 0,
+                'assertions_results': [],
+            }
 
-        # 替换URL中的变量并自动拼接host域名
-        url = resolve_url_with_host(api_request.url, variables, resolver)
-
-        # 准备请求头
-        headers = {}
-        if isinstance(api_request.headers, list):
-            for header_item in api_request.headers:
-                if header_item.get('enabled', True) and header_item.get('key'):
-                    key = header_item['key']
-                    value = _replace_variables(str(header_item.get('value', '')), variables)
-                    value = resolver.resolve(value)
-                    headers[key] = value
-        else:
-            headers = api_request.headers.copy()
-            for key, value in headers.items():
-                headers[key] = _replace_variables(str(value), variables)
-                headers[key] = resolver.resolve(headers[key])
-
-        # 准备请求参数
-        params = api_request.params.copy() if api_request.params else {}
-        for key, value in params.items():
-            params[key] = _replace_variables(str(value), variables)
-            params[key] = resolver.resolve(params[key])
+        variables = parts['variables']
+        url = parts['url']
+        headers = parts['headers']
+        params = parts['params']
 
         # 准备请求体
         body_data = None
         files = None
+        body_type = 'none'  # GET 等方法不进入下面的分支，此处必须先初始化，否则会 UnboundLocalError
         if api_request.body and api_request.method in ['POST', 'PUT', 'PATCH']:
             body_type = api_request.body.get('type', 'json')
 
@@ -512,7 +512,7 @@ def execute_api_request(api_request, environment, executed_by):
                 body_data = _resolve_variables_in_dict(body_data, resolver)
             elif body_type == 'form-data':
                 body_data = {}
-                for item in api_request.body.get('data', []):
+                for item in iter_form_items(api_request.body.get('data', [])):
                     if item.get('enabled', True):
                         key = item.get('key', '')
                         value = item.get('value', '')
@@ -521,7 +521,7 @@ def execute_api_request(api_request, environment, executed_by):
                         body_data[key] = value
             elif body_type == 'x-www-form-urlencoded':
                 body_data = {}
-                for item in api_request.body.get('data', []):
+                for item in iter_form_items(api_request.body.get('data', [])):
                     if item.get('enabled', True):
                         key = item.get('key', '')
                         value = item.get('value', '')
@@ -545,7 +545,7 @@ def execute_api_request(api_request, environment, executed_by):
 
             elif body_type == 'form-data':
                 body_data = {}
-                for item in api_request.body.get('data', []):
+                for item in iter_form_items(api_request.body.get('data', [])):
                     if item.get('enabled', True):
                         key = item.get('key', '')
                         value = item.get('value', '')
@@ -554,7 +554,7 @@ def execute_api_request(api_request, environment, executed_by):
                         body_data[key] = value
             elif body_type == 'x-www-form-urlencoded':
                 body_data = {}
-                for item in api_request.body.get('data', []):
+                for item in iter_form_items(api_request.body.get('data', [])):
                     if item.get('enabled', True):
                         key = item.get('key', '')
                         value = item.get('value', '')
@@ -637,29 +637,31 @@ def execute_api_request(api_request, environment, executed_by):
         # 执行请求后脚本（Tests）：提取响应数据并写回环境变量
         tests_result = run_post_request_script(api_request, response, response_time, environment)
 
-        # 保存请求历史
-        history = RequestHistory.objects.create(
-            request=api_request,
-            environment=environment,
-            request_data={
-                'url': url,
-                'method': api_request.method,
-                'headers': headers,
-                'params': params,
-                'body': body_data
-            },
-            response_data={
-                'headers': dict(response.headers),
-                'body': response.text,
-                'json': response.json() if response.headers.get('content-type', '').startswith(
-                    'application/json') else None,
-                'tests_result': tests_result,
-            },
-            status_code=response.status_code,
-            response_time=response_time,
-            assertions_results=assertions_results,
-            executed_by=executed_by
-        )
+        # 保存请求历史（试跑场景可跳过，且未落库的接口实例无法挂历史）
+        history = None
+        if save_history and getattr(api_request, 'pk', None):
+            history = RequestHistory.objects.create(
+                request=api_request,
+                environment=environment,
+                request_data={
+                    'url': url,
+                    'method': api_request.method,
+                    'headers': headers,
+                    'params': params,
+                    'body': body_data
+                },
+                response_data={
+                    'headers': dict(response.headers),
+                    'body': response.text,
+                    'json': response.json() if response.headers.get('content-type', '').startswith(
+                        'application/json') else None,
+                    'tests_result': tests_result,
+                },
+                status_code=response.status_code,
+                response_time=response_time,
+                assertions_results=assertions_results,
+                executed_by=executed_by
+            )
 
         # 根据断言结果返回成功或失败
         if not passed:
@@ -667,7 +669,7 @@ def execute_api_request(api_request, environment, executed_by):
                 'success': False,
                 'error': error_message,
                 'assertions_results': assertions_results,
-                'history_id': history.id,
+                'history_id': history.id if history else None,
                 'status_code': response.status_code,
                 'response_time': response_time,
                 'response_data': {
@@ -680,7 +682,7 @@ def execute_api_request(api_request, environment, executed_by):
 
         return {
             'success': True,
-            'history_id': history.id,
+            'history_id': history.id if history else None,
             'status_code': response.status_code,
             'response_time': response_time,
             'assertions_results': assertions_results,
@@ -758,6 +760,27 @@ def resolve_url_with_host(url, variables, resolver=None):
     
     return url
 
+def iter_form_items(data):
+    """把 form-data / x-www-form-urlencoded 的 data 规范为 list[{key,value,enabled}]。
+
+    兼容 dict（AI 生成或历史数据）与 list。若直接遍历 dict 会拿到字符串 key，
+    随后的 item.get() 会抛 'str' object has no attribute 'get'。
+    """
+    if isinstance(data, dict):
+        return [{'key': str(k), 'value': '' if v is None else str(v), 'enabled': True}
+                for k, v in data.items()]
+    if isinstance(data, list):
+        items = []
+        for item in data:
+            if isinstance(item, dict):
+                items.append(item)
+            elif isinstance(item, str) and '=' in item:
+                key, value = item.split('=', 1)
+                items.append({'key': key, 'value': value, 'enabled': True})
+        return items
+    return []
+
+
 def _replace_variables_in_dict(data, variables):
     """递归替换字典中的变量"""
     if isinstance(data, dict):
@@ -779,3 +802,211 @@ def _resolve_variables_in_dict(data, resolver):
         return resolver.resolve(data)
     else:
         return data
+
+
+# ---------------------------------------------------------------------------
+# 环境变量统一解析：所有变量只允许来自环境，缺失即报错，避免把 {{xxx}} 原样发出去
+# ---------------------------------------------------------------------------
+
+# 只识别双花括号，避免把 REST 风格路径 /path/{id} 误判为变量
+VAR_REF_PATTERN = re.compile(r'\{\{\s*([A-Za-z_][\w.\-]*)\s*\}\}')
+
+
+def normalize_env_variables(environment):
+    """把环境变量统一成 {name: str}，并展开变量之间的相互引用。
+
+    库里的环境变量有两种形态：
+      - 扁平：{"host": "https://x.com"}
+      - 编辑器形态：{"host": {"currentValue": "...", "initialValue": "..."}}
+    变量值本身也可以引用其它变量，例如 token = "{{token_head}} {{token_body}}"，
+    这里会迭代展开，保证用例里写 {{token}} 能拿到完整值。
+    """
+    raw = getattr(environment, 'variables', None) or {}
+    flat = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            flat[key] = value.get('currentValue') or value.get('initialValue') or ''
+        elif value is None:
+            flat[key] = ''
+        else:
+            flat[key] = str(value)
+
+    for _ in range(5):  # 最多展开 5 轮，兼容循环引用
+        changed = False
+        for key, value in list(flat.items()):
+            if not isinstance(value, str):
+                continue
+            new_value = _replace_variables(value, flat)
+            if new_value != value:
+                flat[key] = new_value
+                changed = True
+        if not changed:
+            break
+    return flat
+
+
+def find_undefined_variables(*texts, variables=None):
+    """返回文本里引用了、但环境里没定义的变量名（按出现顺序去重）。"""
+    variables = variables or {}
+    missing = []
+    for text in texts:
+        if not isinstance(text, str):
+            continue
+        for name in VAR_REF_PATTERN.findall(text):
+            if name not in variables and name not in missing:
+                missing.append(name)
+    return missing
+
+
+def build_auth_headers(auth, variables, resolver=None):
+    """把接口的 auth 配置转成请求头，值同样从环境变量取值。
+
+    支持：bearer / basic / apikey
+      {"type": "bearer", "token": "{{token}}"}
+      {"type": "basic", "username": "{{user}}", "password": "{{pass}}"}
+      {"type": "apikey", "key": "X-API-Key", "value": "{{api_key}}", "in": "header"}
+    """
+    if not isinstance(auth, dict):
+        return {}
+
+    auth_type = str(auth.get('type') or 'none').strip().lower()
+    if auth_type in ('', 'none', 'noauth', 'inherit'):
+        return {}
+
+    def _value(raw):
+        text = _replace_variables(str(raw or ''), variables)
+        return resolver.resolve(text) if resolver else text
+
+    if auth_type == 'bearer':
+        token = _value(auth.get('token'))
+        if not token:
+            return {}
+        if token.lower().startswith('bearer '):
+            return {'Authorization': token}
+        return {'Authorization': f'Bearer {token}'}
+
+    if auth_type == 'basic':
+        username = _value(auth.get('username'))
+        password = _value(auth.get('password'))
+        encoded = base64.b64encode(f'{username}:{password}'.encode()).decode()
+        return {'Authorization': f'Basic {encoded}'}
+
+    if auth_type in ('apikey', 'api_key', 'api-key'):
+        if str(auth.get('in') or 'header').strip().lower() != 'header':
+            return {}
+        key = str(auth.get('key') or 'X-API-Key').strip()
+        value = _value(auth.get('value') or auth.get('api_key'))
+        return {key: value} if value else {}
+
+    return {}
+
+
+def _build_headers(raw_headers, variables, resolver=None):
+    headers = {}
+    if isinstance(raw_headers, list):
+        for item in raw_headers:
+            if isinstance(item, dict) and item.get('enabled', True) and item.get('key'):
+                text = _replace_variables(str(item.get('value', '')), variables)
+                headers[item['key']] = resolver.resolve(text) if resolver else text
+        return headers
+
+    for key, value in (raw_headers or {}).items():
+        text = _replace_variables(str(value), variables)
+        headers[key] = resolver.resolve(text) if resolver else text
+    return headers
+
+
+def _build_params(raw_params, variables, resolver=None):
+    params = {}
+    if isinstance(raw_params, list):
+        for item in raw_params:
+            if isinstance(item, dict) and item.get('enabled', True) and item.get('key'):
+                text = _replace_variables(str(item.get('value', '')), variables)
+                params[item['key']] = resolver.resolve(text) if resolver else text
+        return params
+
+    for key, value in (raw_params or {}).items():
+        text = _replace_variables(str(value), variables)
+        params[key] = resolver.resolve(text) if resolver else text
+    return params
+
+
+def _build_body(api_request, variables, resolver=None):
+    """返回 (body_type, body_data, files)。"""
+    body_type = 'none'
+    body_data = None
+    files = None
+
+    if not api_request.body or api_request.method not in ('POST', 'PUT', 'PATCH'):
+        return body_type, body_data, files
+
+    body_type = api_request.body.get('type', 'json')
+
+    if body_type == 'json':
+        body_data = _replace_variables_in_dict(api_request.body.get('data', {}), variables)
+        if resolver:
+            body_data = _resolve_variables_in_dict(body_data, resolver)
+    elif body_type in ('form-data', 'x-www-form-urlencoded'):
+        body_data = {}
+        for item in iter_form_items(api_request.body.get('data', [])):
+            if item.get('enabled', True):
+                text = _replace_variables(str(item.get('value', '')), variables)
+                body_data[item.get('key', '')] = resolver.resolve(text) if resolver else text
+    elif body_type == 'raw':
+        body_data = _replace_variables(api_request.body.get('data', ''), variables)
+        if resolver:
+            body_data = resolver.resolve(body_data)
+    elif body_type == 'binary':
+        file_data = api_request.body.get('file_data')
+        if file_data:
+            files = []
+            for file_item in file_data:
+                if file_item.get('enabled', True) and file_item.get('path'):
+                    files.append((file_item.get('key', ''), open(file_item['path'], 'rb')))
+
+    return body_type, body_data, files
+
+
+def prepare_request_parts(api_request, environment, resolver=None):
+    """按环境变量准备一次请求的 url / headers / params / body。
+
+    返回值 (parts, missing)：
+      parts   —— {'url','headers','params','body_type','body_data','files','variables'}
+      missing —— 环境中缺失的变量名列表，非空时调用方应中断执行并提示用户
+    """
+    resolver = resolver or VariableResolver()
+    variables = normalize_env_variables(environment)
+
+    missing = find_undefined_variables(
+        api_request.url,
+        json.dumps(api_request.headers, ensure_ascii=False, default=str),
+        json.dumps(api_request.params, ensure_ascii=False, default=str),
+        json.dumps(api_request.body, ensure_ascii=False, default=str),
+        json.dumps(api_request.auth, ensure_ascii=False, default=str),
+        variables=variables,
+    )
+
+    parts = {
+        'url': resolve_url_with_host(api_request.url, variables, resolver),
+        'headers': _build_headers(api_request.headers, variables, resolver),
+        'params': _build_params(api_request.params, variables, resolver),
+        'variables': variables,
+    }
+
+    body_type, body_data, files = _build_body(api_request, variables, resolver)
+    parts['body_type'] = body_type
+    parts['body_data'] = body_data
+    parts['files'] = files
+
+    # 认证信息统一从环境变量取值（用例里不写死 token）
+    for key, value in build_auth_headers(api_request.auth, variables, resolver).items():
+        parts['headers'].setdefault(key, value)
+
+    # 表单类请求不能沿用用例里手写的 Content-Type：
+    # 例如写死 multipart/form-data 却没有 boundary，服务端解析不到表单会返回 401/400。
+    # 交给 requests 依据实际 data/files 自动生成正确的头。
+    if parts['body_type'] in ('form-data', 'x-www-form-urlencoded', 'binary'):
+        for key in [k for k in parts['headers'] if str(k).lower() == 'content-type']:
+            parts['headers'].pop(key)
+
+    return parts, missing

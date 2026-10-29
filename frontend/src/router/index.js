@@ -214,6 +214,11 @@ const routes = [
                 component: () => import('@/views/api-testing/AIServiceConfig.vue')
             },
             {
+                path: 'ai-cases',
+                name: 'ApiAiCases',
+                component: () => import('@/views/api-testing/ai-cases/AiCaseCenter.vue')
+            },
+            {
                 path: 'notification-logs',
                 name: 'ApiNotificationLogs',
                 component: () => import('@/views/notification/NotificationLogs.vue')

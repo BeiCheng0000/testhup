@@ -35,6 +35,7 @@ export default {
     environmentManagement: 'Environment Management',
     scheduledTasks: 'Scheduled Tasks',
     notificationList: 'Notification List',
+    aiCases: 'AI API Cases',
 
     // UI Automation
     elementManagement: 'Element Management',

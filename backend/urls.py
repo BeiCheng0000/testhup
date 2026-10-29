@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/ui-automation/', include('apps.ui_automation.urls')),
     path('api/app-automation/', include('apps.app_automation.urls')),  # APP自动化测试
     path('api/', include('apps.api_testing.urls')),
+    path('api/', include('apps.api_case_ai.urls')),
     path('api/core/', include('apps.core.urls')),
     path('api/data-factory/', include('apps.data_factory.urls')),
 ]

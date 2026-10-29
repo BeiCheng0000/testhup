@@ -44,7 +44,13 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
-from .utils import execute_assertions, resolve_url_with_host, run_post_request_script
+from .utils import (
+    execute_assertions,
+    iter_form_items,
+    prepare_request_parts,
+    resolve_url_with_host,
+    run_post_request_script,
+)
 from .operation_logger import log_operation
 from .variable_resolver import VariableResolver
 from .serializers import (
@@ -966,30 +972,28 @@ def _run_test_suite_execution(execution_id, test_suite_id, user_id):
                 last_reconnect_time = now
             api_request = suite_request.request
             try:
-                variables = {}
-                if test_suite.environment:
-                    variables.update(test_suite.environment.variables)
+                # 变量全部来自环境：缺失时记为失败并继续，避免把 {{xxx}} 原样发出去
+                parts, missing = prepare_request_parts(api_request, test_suite.environment, resolver)
+                if missing:
+                    failed_count += 1
+                    results.append({
+                        'name': api_request.name,
+                        'method': api_request.method,
+                        'url': api_request.url,
+                        'passed': False,
+                        'status_code': None,
+                        'response_time': 0,
+                        'error': ('环境「%s」缺少变量：%s。变量必须全部来自环境'
+                                  % (test_suite.environment.name
+                                     if test_suite.environment else '未指定',
+                                     '、'.join('{{%s}}' % m for m in missing))),
+                    })
+                    continue
 
-                url = resolve_url_with_host(api_request.url, variables, resolver)
-
-                headers = {}
-                if isinstance(api_request.headers, list):
-                    for header_item in api_request.headers:
-                        if header_item.get('enabled', True) and header_item.get('key'):
-                            key = header_item['key']
-                            value = _replace_vars(str(header_item.get('value', '')), variables)
-                            value = resolver.resolve(value)
-                            headers[key] = value
-                else:
-                    headers = api_request.headers.copy() if api_request.headers else {}
-                    for key, value in headers.items():
-                        headers[key] = _replace_vars(str(value), variables)
-                        headers[key] = resolver.resolve(headers[key])
-
-                params = api_request.params.copy() if api_request.params else {}
-                for key, value in params.items():
-                    params[key] = _replace_vars(str(value), variables)
-                    params[key] = resolver.resolve(params[key])
+                variables = parts['variables']
+                url = parts['url']
+                headers = parts['headers']
+                params = parts['params']
 
                 body_data = None
                 files = None
@@ -1002,7 +1006,7 @@ def _run_test_suite_execution(execution_id, test_suite_id, user_id):
                         body_data = _resolve_vars_in_dict(body_data, resolver)
                     elif body_type == 'form-data':
                         body_data = {}
-                        for item in api_request.body.get('data', []):
+                        for item in iter_form_items(api_request.body.get('data', [])):
                             if item.get('enabled', True):
                                 key = item.get('key', '')
                                 value = item.get('value', '')
@@ -1011,7 +1015,7 @@ def _run_test_suite_execution(execution_id, test_suite_id, user_id):
                                 body_data[key] = value
                     elif body_type == 'x-www-form-urlencoded':
                         body_data = {}
-                        for item in api_request.body.get('data', []):
+                        for item in iter_form_items(api_request.body.get('data', [])):
                             if item.get('enabled', True):
                                 key = item.get('key', '')
                                 value = item.get('value', '')

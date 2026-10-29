@@ -92,6 +92,10 @@
               <el-icon><Bell /></el-icon>
               <span>{{ $t('menu.notificationList') }}</span>
             </el-menu-item>
+            <el-menu-item index="/api-testing/ai-cases">
+              <el-icon><MagicStick /></el-icon>
+              <span>{{ $t('menu.aiCases') }}</span>
+            </el-menu-item>
           </template>
 
           <!-- UI自动化测试模块菜单 -->
@@ -397,6 +401,7 @@ const breadcrumbTitle = computed(() => {
     '/api-testing/reports': t('menu.testReport'),
     '/api-testing/scheduled-tasks': t('menu.scheduledTasks'),
     '/api-testing/notification-logs': t('menu.notificationList'),
+    '/api-testing/ai-cases': t('menu.aiCases'),
 
     // UI自动化测试
     '/ui-automation/dashboard': t('menu.dashboard'),
