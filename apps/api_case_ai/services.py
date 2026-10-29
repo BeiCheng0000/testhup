@@ -393,11 +393,66 @@ def _normalize_assertions(raw_assertions):
     return result or default
 
 
-def normalize_case(raw, index):
+# URL 开头的域名变量前缀：{{host_test}}、{host_test} 都算
+_HOST_VAR_PREFIX_RE = re.compile(r'^\s*\{\{?\s*[A-Za-z_][\w.\-]*\s*\}?\}\s*')
+
+
+def _host_var_prefix(url):
+    """取 URL 开头的域名变量前缀，原样返回（保留单/双花括号写法）。"""
+    if not url:
+        return ''
+    m = _HOST_VAR_PREFIX_RE.match(url)
+    return m.group(0) if m else ''
+
+
+# 整个值就是一个变量占位，如 {{token}} / {token}
+_PLACEHOLDER_VALUE_RE = re.compile(r'^\s*\{\{?\s*([A-Za-z_][\w.\-]*)\s*\}?\}\s*$')
+
+
+def _restore_real_headers(headers, source_request, available_variables):
+    """把模型臆造的占位请求头还原成来源接口的真实值。
+
+    模型常把来源接口里真实的 token 值改写成 {{valid_token}}，而环境里并没有这个变量，
+    执行时不会被替换、只会原样发出，必然鉴权失败。
+    还原条件：来源接口有同名头的真实值，且该占位变量确实未定义。
+    """
+    if not headers or source_request is None:
+        return headers
+
+    src_values = {}
+    for item in (getattr(source_request, 'headers', None) or []):
+        if not isinstance(item, dict) or not item.get('enabled', True):
+            continue
+        key = (item.get('key') or item.get('name') or '').strip()
+        value = item.get('value') or ''
+        # 来源本身就是占位（如 {{token}}）——属于有意的变量引用，不参与还原
+        if not key or not value or _PLACEHOLDER_VALUE_RE.match(value):
+            continue
+        src_values[key.lower()] = value
+
+    if not src_values:
+        return headers
+
+    fixed = {}
+    for key, value in headers.items():
+        text = value if isinstance(value, str) else ''
+        m = _PLACEHOLDER_VALUE_RE.match(text)
+        if m and m.group(1) not in (available_variables or set()):
+            real = src_values.get(str(key).lower())
+            if real:
+                logger.info('还原被改写的请求头 %s: %s -> 来源接口的真实值', key, value)
+                fixed[key] = real
+                continue
+        fixed[key] = value
+    return fixed
+
+
+def normalize_case(raw, index, source_url=None, source_request=None, available_variables=None):
     """把模型输出的一条用例归一化为草稿字段。
 
-    url 保持相对路径（如 /api/v1/users），域名由执行环境变量的 host 自动补全，
-    避免把地址写死在用例里。
+    url 默认保持相对路径（如 /api/v1/users），域名由执行环境变量的 host 自动补全；
+    但若来源接口用 {{host_test}} 指定了环境，相对路径要补回这个前缀——
+    否则执行时回落到默认 host，用例会打到另一个环境。
     """
     name = (raw.get('name') or raw.get('title') or f'AI用例-{index + 1}').strip()
     method = str(raw.get('method') or 'GET').upper()
@@ -406,15 +461,25 @@ def normalize_case(raw, index):
 
     url = (raw.get('url') or raw.get('path') or '').strip()
 
+    # 来源接口用 {{host_test}} 指定环境时补回前缀，避免执行时落到默认 host
+    prefix = _host_var_prefix(source_url or '')
+    if prefix and url and not _host_var_prefix(url) \
+            and not url.startswith(('http://', 'https://')):
+        url = prefix + '/' + url.lstrip('/')
+
     priority = str(raw.get('priority') or 'P1').upper()
     if priority not in ('P0', 'P1', 'P2', 'P3'):
         priority = 'P1'
+
+    headers = _as_dict(raw.get('headers'))
+    if source_request is not None:
+        headers = _restore_real_headers(headers, source_request, available_variables)
 
     return {
         'name': name[:200],
         'method': method,
         'url': url,
-        'headers': _as_dict(raw.get('headers')),
+        'headers': headers,
         'params': _as_dict(raw.get('params') or raw.get('query')),
         'body': _normalize_body(raw.get('body')),
         'auth': _as_dict(raw.get('auth')),
@@ -545,24 +610,60 @@ def _request_brief(api_request, index, probe=None):
     return brief
 
 
-def _env_prompt_block(environment):
-    """生成给模型看的环境变量说明（不含敏感值，只给变量名与地址）。"""
-    if not environment:
-        return '【执行环境】未绑定环境，url 请使用相对路径（如 /api/v1/users），不要写死域名。'
+def _collect_variables(environment, project=None):
+    """任务可用的变量 = 绑定环境 + 全局环境(scope=GLOBAL)。
 
-    variables = environment.variables or {}
+    全局环境里常放 host_test 这类域名变量，且有的不绑定项目(project=None)，
+    不纳入的话模型根本不知道它存在，只能生成相对路径的 URL。
+    """
+    variables = dict(environment.variables or {}) if environment else {}
+    try:
+        from apps.api_testing.utils import global_variables_for_project
+        for key, value in global_variables_for_project(project).items():
+            variables.setdefault(key, value)
+    except Exception as exc:  # 取不到全局变量不该阻断生成
+        logger.warning('读取全局环境变量失败，提示词仅含绑定环境: %s', exc)
+    return variables
+
+
+def _env_prompt_block(environment, project=None):
+    """生成给模型看的环境变量说明（只给变量名与地址，不展开其它敏感值）。"""
+    variables = _collect_variables(environment, project)
+
+    lines = [f'【执行环境】{environment.name}' if environment else '【执行环境】未绑定环境']
     keys = sorted(variables.keys())
-    lines = [f'【执行环境】{environment.name}']
     if keys:
         lines.append('【可用变量】' + '、'.join('{{%s}}' % k for k in keys))
-        hosts = {k: variables.get(k) for k in ('host', 'base_url', 'domain', 'HOST', 'BASE_URL')
-                 if variables.get(k) and not isinstance(variables.get(k), dict)}
+        def _plain(v):
+            # 环境里可能存成编辑器形态 {"currentValue": "...", "initialValue": "..."}
+            if isinstance(v, dict):
+                return v.get('currentValue') or v.get('initialValue') or ''
+            return '' if v is None else v
+
+        hosts = {k: _plain(variables[k])
+                 for k in ('host', 'host_test', 'host_zs', 'host_pre',
+                           'base_url', 'domain', 'HOST', 'BASE_URL')
+                 if _plain(variables.get(k))}
         if hosts:
             lines.append('【环境地址】' + json.dumps(hosts, ensure_ascii=False))
-    lines.append('要求：url 使用相对路径（如 /api/v1/users），不要写死域名；'
-                 '鉴权请写成 Authorization 头并用 {{token}} 这类占位；'
-                 '只能使用上面列出的变量名，禁止发明不存在的变量——'
-                 '环境里没有的变量一旦写进用例，执行时会直接报错。')
+    lines.append(
+        'url 书写要求：默认用相对路径（如 /api/v1/users）；'
+        '若来源接口 url 以 {{host_test}} 这类变量开头，必须原样保留该变量前缀'
+        '（如 {{host_test}}/report/...），既不要改成相对路径也不要写死域名——'
+        '它决定用例打到哪个环境。'
+    )
+    lines.append(
+        '请求头要求（重要）：来源接口已有的请求头（token / Authorization / Cookie 等）'
+        '必须原样照抄其 value，具体值（如 login_xxx、eyJhbGci...）直接保留，'
+        '不要替换成 {{valid_token}} 这类占位——具体值本来就能直接执行，'
+        '换成不存在的变量后执行时不会被替换、只会原样发出，必然鉴权失败；'
+        '只有来源接口本身就写成 {{token}} 占位时才保留占位。'
+    )
+    lines.append(
+        '变量使用：只能使用上面【可用变量】列出的变量名，'
+        '禁止发明不存在的变量（如 valid_token、token_value）——'
+        '未定义的变量执行时不会被替换，会原样发给服务端，导致请求必然失败。'
+    )
     return '\n'.join(lines)
 
 
@@ -571,7 +672,8 @@ def build_generation_prompt(task, source_requests=None, probes=None):
 
     probes 为预跑结果（按 request_id 索引），让模型按真实响应结构写断言。
     """
-    env_block = _env_prompt_block(getattr(task, 'environment', None))
+    env_block = _env_prompt_block(
+        getattr(task, 'environment', None), getattr(task, 'project', None))
     probes = probes or {}
 
     if source_requests:
@@ -598,11 +700,16 @@ def build_generation_prompt(task, source_requests=None, probes=None):
             '输出要求：',
             '1. 输出 JSON 数组，每个元素是一条用例；',
             '2. 每个元素必须包含 "source_index"，值为其来源接口在上面的 index；',
-            '3. 用例 url 基于来源接口，但要写成以 / 开头的相对路径，追加查询参数即可，不要带协议和域名；',
+            '3. 用例 url 基于来源接口：默认写成以 / 开头的相对路径，追加查询参数即可，不要带协议和域名；'
+            '若来源接口 url 以 {{host_test}} 这类变量开头，必须原样保留该变量前缀'
+            '（如 {{host_test}}/report/...），不要改成相对路径也不要写死域名；',
             '4. 断言必须可执行：状态码用 status_code；校验响应字段时优先使用 probe.json_preview 的真实路径，'
             '层级不确定时用 contains 断言字段名；',
             '5. 不要输出 Content-Type 请求头，执行时会按 body 类型自动生成；',
-            '6. 只输出 JSON 数组。',
+            '6. 请求头（token / Authorization / Cookie 等）照抄来源接口的原 value，'
+            '   具体字符串原样保留，不要替换成任何 {{...}} 占位；'
+            '   只能使用【可用变量】中列出的变量名，禁止发明；',
+            '7. 只输出 JSON 数组。',
         ])
         return '\n'.join(lines)
 
@@ -617,7 +724,8 @@ def build_generation_prompt(task, source_requests=None, probes=None):
         task.source_content,
         '',
         '要求：用例覆盖正常场景、参数异常、边界值、鉴权缺失等；每条用例断言必须可执行；'
-        'url 使用相对路径，环境相关的值用 {{变量名}} 占位。',
+        'url 使用相对路径；token、id 等具体值原样保留，不要替换成占位变量；'
+        '只能使用上面【可用变量】列出的变量名，禁止发明。',
         '只输出 JSON 数组。',
     ]
     return '\n'.join(lines)
@@ -696,6 +804,10 @@ def run_generation(task_id, user_id):
                 error_message=f'AI 输出无法解析为 JSON 用例数组：{str(text)[:300]}')
             return
 
+        # 可用变量表：用于把模型臆造的占位请求头（如 {{valid_token}}）还原成真实值
+        available_variables = set(_collect_variables(
+            getattr(task, 'environment', None), getattr(task, 'project', None)).keys())
+
         created = 0
         for index, raw in enumerate(cases):
             if not isinstance(raw, dict):
@@ -712,7 +824,12 @@ def run_generation(task_id, user_id):
                 if raw_index is not None and 0 <= raw_index < len(source_requests):
                     source_request = source_requests[raw_index]
 
-            fields = normalize_case(raw, index)
+            fields = normalize_case(
+                raw, index,
+                source_request.url if source_request else None,
+                source_request=source_request,
+                available_variables=available_variables,
+            )
             if source_request and not fields['url']:
                 fields['url'] = source_request.url
 

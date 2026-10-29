@@ -74,6 +74,16 @@ function highlightJson(s: string): string {
   )
 }
 
+function highlightMarkup(s: string): string {
+  // 与 JSON 高亮同一原则：只给原文套标签，不增删任何字符，
+  // 否则高亮层与输入层不对齐，光标会错位
+  return escapeHtml(s).replace(
+    /(&lt;\/?)([A-Za-z_][\w:.-]*)/g,
+    (_m, open: string, name: string) =>
+      `<span style="color: #859900;">${open}</span><span style="color: #268bd2;">${name}</span>`
+  )
+}
+
 const highlighted = computed(() => {
   const v = props.modelValue ?? ''
   if (!v) return ''
@@ -84,7 +94,10 @@ const highlighted = computed(() => {
       return escapeHtml(v)
     }
   }
-  // 非 JSON：仅做 HTML 转义，避免直接使用用户输入破坏页面
+  if (props.language === 'html' || props.language === 'xml') {
+    return highlightMarkup(v)
+  }
+  // 其余语言（text / javascript）只做 HTML 转义，避免直接使用用户输入破坏页面
   return escapeHtml(v)
 })
 </script>

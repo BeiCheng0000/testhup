@@ -319,7 +319,7 @@
                   <CodeEditor
                     ref="rawBodyInputRef"
                     v-model="rawBody"
-                    :language="rawType === 'json' ? 'json' : 'text'"
+                    :language="rawType"
                     :placeholder="$t('apiTesting.interface.inputRequestBody')"
                     class="raw-body"
                   />
@@ -1467,7 +1467,8 @@ const jsonPathResult = ref(null)
 
 // Body相关
 const bodyType = ref('none')
-const rawType = ref('text')
+// 原始文本默认按 JSON 展示（最常用），可手动切到 text / html / xml
+const rawType = ref('json')
 const formData = ref([])
 const formUrlEncoded = ref([])
 const rawBody = ref('')

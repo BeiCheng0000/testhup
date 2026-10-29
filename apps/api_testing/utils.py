@@ -970,19 +970,14 @@ def _build_body(api_request, variables, resolver=None):
     return body_type, body_data, files
 
 
-def collect_global_variables(api_request):
-    """取全局环境变量（scope=GLOBAL），按「项目级优先、跨项目兜底」合并。
+def global_variables_for_project(project):
+    """取某项目可用的全局环境变量（scope=GLOBAL），项目级优先、跨项目兜底。
 
     host_test 这类域名变量通常配在不绑定项目(project=None)的全局环境里，
     只按当前项目查会查不到，导致执行时 {{host_test}} 原样发出去、请求直接失败。
     """
     from django.db.models import F, Q
     from .models import Environment
-
-    project = None
-    collection = getattr(api_request, 'collection', None)
-    if collection:
-        project = getattr(collection, 'project', None)
 
     qs = Environment.objects.filter(scope='GLOBAL')
     if project:
@@ -996,6 +991,15 @@ def collect_global_variables(api_request):
         for key, value in normalize_env_variables(env).items():
             variables.setdefault(key, value)
     return variables
+
+
+def collect_global_variables(api_request):
+    """按接口所属项目取全局环境变量（执行期用）。"""
+    project = None
+    collection = getattr(api_request, 'collection', None)
+    if collection:
+        project = getattr(collection, 'project', None)
+    return global_variables_for_project(project)
 
 
 def prepare_request_parts(api_request, environment, resolver=None):
