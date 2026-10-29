@@ -23,7 +23,7 @@ import { computed, ref } from 'vue'
 
 const props = defineProps<{
   modelValue: string
-  language?: 'text' | 'json' | 'html' | 'xml'
+  language?: 'text' | 'json' | 'html' | 'xml' | 'javascript'
   placeholder?: string
   readonly?: boolean
 }>()
@@ -56,17 +56,22 @@ function escapeHtml(s: string): string {
 }
 
 function highlightJson(s: string): string {
-  return escapeHtml(s)
-    .replace(/"([^"\\]*(\\.[^"\\]*)*)"(\s*:)?/g, (m, _g1, _g2, colon) => {
-      if (colon) {
-        // key：去掉首尾引号后只包一层
-        return `<span style="color: #268bd2;">"${m.replace(/^"|":?\s*$/g, '')}"</span>${colon}`
+  // 铁律：高亮只能「给原文套一层标签」，绝不能增删任何字符。
+  // 之前的实现会把 :true 改成 `: true`（多插一个空格）、把 `"k" :` 的冒号重复输出，
+  // 高亮层与输入层字符数一旦不等，光标就和文字错位，且越往后偏得越明显。
+  return escapeHtml(s).replace(
+    /("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+    (m, str: string | undefined, colon: string | undefined) => {
+      if (str) {
+        return colon
+          ? `<span style="color: #268bd2;">${str}</span>${colon}`
+          : `<span style="color: #2aa198;">${str}</span>`
       }
-      // string value：m 已含引号，直接使用
-      return `<span style="color: #2aa198;">${m}</span>`
-    })
-    .replace(/:\s*(true|false|null)(?=[,\s}])/g, ': <span style="color: #cb4b16;">$1</span>')
-    .replace(/:\s*(-?\d+(\.\d+)?([eE][+-]?\d+)?)(?=[,\s}])/g, ': <span style="color: #d33682;">$1</span>')
+      // 布尔/null 与数字：原样包一层，字符数保持不变
+      const isBool = m === 'true' || m === 'false' || m === 'null'
+      return `<span style="color: ${isBool ? '#cb4b16' : '#d33682'};">${m}</span>`
+    }
+  )
 }
 
 const highlighted = computed(() => {
@@ -109,6 +114,28 @@ const highlighted = computed(() => {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
+  /* 连字、字距、字距调整都会改变字符实际宽度；
+     输入层与高亮层必须逐字符等宽，否则光标和文字会错位且越往后越偏 */
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+  font-feature-settings: normal;
+  font-kerning: none;
+}
+
+/* <code> 带浏览器默认样式 font-family: monospace，会覆盖继承自 <pre> 的字体栈，
+   结果是高亮层字体和输入层不一致、字符宽度不同（中文尤其明显），
+   光标位置与文字显示位置因此错开，且随输入长度累积 */
+.code-editor__highlight code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  tab-size: inherit;
+  white-space: inherit;
 }
 
 .code-editor__input {

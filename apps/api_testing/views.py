@@ -45,11 +45,14 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 from .utils import (
+    collect_global_variables,
     execute_assertions,
     iter_form_items,
+    normalize_env_variables,
     prepare_request_parts,
     resolve_url_with_host,
     run_post_request_script,
+    variable_aliases,
 )
 from .operation_logger import log_operation
 from .variable_resolver import VariableResolver
@@ -484,11 +487,17 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             # 创建变量解析器
             resolver = VariableResolver()
 
-            # 解析环境变量
-            variables = {}
+            # 解析环境变量：全局环境打底，指定环境覆盖（局部优先）
+            # 全局环境(scope=GLOBAL)常放 host_test 这类跨项目变量，且有的不绑定项目
+            # (project=None)——只按当前项目查会查不到，{{host_test}} 就会原样发出去
+            variables = collect_global_variables(api_request)
+
+            env = None
             if environment_id:
-                env = Environment.objects.get(id=environment_id)
-                variables.update(env.variables)
+                # 用 filter().first()：环境被删时给出空变量而不是 500
+                env = Environment.objects.filter(id=environment_id).first()
+                if env:
+                    variables.update(normalize_env_variables(env))
             
             # 使用前端发送的更新后的数据，如果没有则使用数据库中的数据
             request_params = request.data.get('params', api_request.params)
@@ -690,8 +699,10 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             else:
                 replacement = str(value) if value is not None else ''
             # 兼容单花括号 {key} 写法：先替换双花括号 {{key}}，再替换单花括号 {key}
-            result = result.replace(f'{{{{{key}}}}}', replacement)
-            result = result.replace(f'{{{key}}}', replacement)
+            # 并按别名替换，让 {host-test} 也能命中环境里的 host_test
+            for name in variable_aliases(key):
+                result = result.replace(f'{{{{{name}}}}}', replacement)
+                result = result.replace(f'{{{name}}}', replacement)
         return result
     
     def _replace_variables_in_dict(self, data, variables):
@@ -972,23 +983,13 @@ def _run_test_suite_execution(execution_id, test_suite_id, user_id):
                 last_reconnect_time = now
             api_request = suite_request.request
             try:
-                # 变量全部来自环境：缺失时记为失败并继续，避免把 {{xxx}} 原样发出去
+                # 变量来自环境（含全局环境兜底）。缺失不再中断：按原数据继续请求，
+                # 由上游决定成败，缺失只记日志
                 parts, missing = prepare_request_parts(api_request, test_suite.environment, resolver)
                 if missing:
-                    failed_count += 1
-                    results.append({
-                        'name': api_request.name,
-                        'method': api_request.method,
-                        'url': api_request.url,
-                        'passed': False,
-                        'status_code': None,
-                        'response_time': 0,
-                        'error': ('环境「%s」缺少变量：%s。变量必须全部来自环境'
-                                  % (test_suite.environment.name
-                                     if test_suite.environment else '未指定',
-                                     '、'.join('{{%s}}' % m for m in missing))),
-                    })
-                    continue
+                    logger.warning(
+                        '接口[id=%s] 引用了未定义变量 %s，按原数据继续请求',
+                        api_request.id, '、'.join(missing))
 
                 variables = parts['variables']
                 url = parts['url']
@@ -1312,8 +1313,10 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
             else:
                 replacement = str(value) if value is not None else ''
             # 兼容单花括号 {key} 写法：先替换双花括号 {{key}}，再替换单花括号 {key}
-            result = result.replace(f'{{{{{key}}}}}', replacement)
-            result = result.replace(f'{{{key}}}', replacement)
+            # 并按别名替换，让 {host-test} 也能命中环境里的 host_test
+            for name in variable_aliases(key):
+                result = result.replace(f'{{{{{name}}}}}', replacement)
+                result = result.replace(f'{{{name}}}', replacement)
         return result
     
     def _replace_variables_in_dict(self, data, variables):

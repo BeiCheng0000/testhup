@@ -29,7 +29,7 @@
             <el-button type="primary" size="small" @click="openCreateCollectionDialog" :title="$t('apiTesting.interface.createCollection')">
               <el-icon><Folder /></el-icon>
             </el-button>
-            <el-button type="success" size="small" @click="createEmptyRequest" :title="$t('apiTesting.interface.addInterface')">
+            <el-button type="success" size="small" @click="openCreateRequestDialog()" :title="$t('apiTesting.interface.addInterface')">
               <el-icon><Plus /></el-icon>
             </el-button>
           </div>
@@ -75,6 +75,17 @@
                 <span v-if="data.type === 'request' && data.request_type !== 'WEBSOCKET'" class="method-tag" :class="(data.method || 'GET').toLowerCase()">
                   {{ data.method || 'GET' }}
                 </span>
+
+                <!-- AI 用例中心采纳进来的接口，标记其来源 -->
+                <el-tooltip
+                  v-if="data.type === 'request' && data.ai_generated"
+                  :content="data.ai_source_request_name
+                    ? `AI 用例 · 源自接口「${data.ai_source_request_name}」`
+                    : 'AI 用例 · 人工添加'"
+                  placement="top"
+                >
+                  <span class="ai-tag">AI</span>
+                </el-tooltip>
               </div>
             </template>
           </el-tree>
@@ -112,7 +123,7 @@
       <div class="main-content">
         <div v-if="!selectedRequest" class="empty-state">
           <el-empty :description="$t('apiTesting.interface.selectInterface')">
-            <el-button type="primary" @click="createEmptyRequest">{{ $t('apiTesting.interface.createNewInterface') }}</el-button>
+            <el-button type="primary" @click="openCreateRequestDialog()">{{ $t('apiTesting.interface.createNewInterface') }}</el-button>
           </el-empty>
         </div>
 
@@ -188,6 +199,11 @@
                 size="small"
                 class="name-input"
               />
+              <el-tag v-if="selectedRequest?.ai_generated" size="small" class="ai-origin-tag" effect="plain">
+                {{ selectedRequest.ai_source_request_name
+                  ? `AI 用例 · 源自「${selectedRequest.ai_source_request_name}」`
+                  : 'AI 用例' }}
+              </el-tag>
               <div class="action-buttons">
                 <el-button size="small" @click="saveRequest" :loading="saving" ref="saveButtonRef">
                   {{ $t('apiTesting.common.save') }}
@@ -218,7 +234,7 @@
 
           <!-- 请求配置 -->
           <el-tabs v-model="activeTab" class="request-tabs">
-            <el-tab-pane label="Params" name="params">
+            <el-tab-pane :label="$t('apiTesting.interface.tabParams')" name="params">
               <KeyValueEditor
                 v-model="selectedRequest.params"
                 :placeholder-key="$t('apiTesting.interface.paramName')"
@@ -226,7 +242,7 @@
               />
             </el-tab-pane>
 
-            <el-tab-pane label="Headers" name="headers">
+            <el-tab-pane :label="$t('apiTesting.interface.tabHeaders')" name="headers">
               <KeyValueEditor
                 ref="headersEditorRef"
                 v-model="selectedRequest.headers"
@@ -236,14 +252,14 @@
               />
             </el-tab-pane>
 
-            <el-tab-pane label="Body" name="body" v-if="hasBody">
+            <el-tab-pane :label="$t('apiTesting.interface.tabBody')" name="body" v-if="hasBody">
               <div class="body-container">
                 <el-radio-group v-model="bodyType" @change="onBodyTypeChange">
-                  <el-radio value="none">none</el-radio>
-                  <el-radio value="form-data">form-data</el-radio>
-                  <el-radio value="x-www-form-urlencoded">x-www-form-urlencoded</el-radio>
-                  <el-radio value="raw">raw</el-radio>
-                  <el-radio value="binary">binary</el-radio>
+                  <el-radio value="none">{{ $t('apiTesting.interface.bodyNone') }}</el-radio>
+                  <el-radio value="form-data">{{ $t('apiTesting.interface.bodyFormData') }}</el-radio>
+                  <el-radio value="x-www-form-urlencoded">{{ $t('apiTesting.interface.bodyUrlencoded') }}</el-radio>
+                  <el-radio value="raw">{{ $t('apiTesting.interface.bodyRaw') }}</el-radio>
+                  <el-radio value="binary">{{ $t('apiTesting.interface.bodyBinary') }}</el-radio>
                 </el-radio-group>
 
                 <div v-if="bodyType === 'form-data'" class="body-content">
@@ -266,10 +282,10 @@
                 <div v-else-if="bodyType === 'raw'" class="body-content">
                   <div class="raw-options">
                     <el-select v-model="rawType" style="width: 150px;">
-                      <el-option label="Text" value="text" />
-                      <el-option label="JSON" value="json" />
-                      <el-option label="HTML" value="html" />
-                      <el-option label="XML" value="xml" />
+                      <el-option :label="$t('apiTesting.interface.rawText')" value="text" />
+                      <el-option :label="$t('apiTesting.interface.rawJson')" value="json" />
+                      <el-option :label="$t('apiTesting.interface.rawHtml')" value="html" />
+                      <el-option :label="$t('apiTesting.interface.rawXml')" value="xml" />
                     </el-select>
 
                     <el-button
@@ -313,13 +329,13 @@
 
             <!-- HTTP接口专用标签页 -->
             <template v-if="!selectedRequest || selectedRequest.request_type !== 'WEBSOCKET'">
-              <el-tab-pane label="Pre-request Script" name="pre-script">
+              <el-tab-pane :label="$t('apiTesting.interface.tabPreScript')" name="pre-script">
                 <div class="script-editor-container">
-                  <el-input
+                  <CodeEditor
                     v-model="selectedRequest.pre_request_script"
-                    type="textarea"
-                    :rows="10"
-                    placeholder="// 请求前脚本，使用JavaScript语法"
+                    language="javascript"
+                    :placeholder="$t('apiTesting.interface.preRequestScript')"
+                    class="script-code"
                   />
                   <div class="script-buttons">
                     <el-button
@@ -344,13 +360,13 @@
                 </div>
               </el-tab-pane>
 
-              <el-tab-pane label="Tests" name="tests">
+              <el-tab-pane :label="$t('apiTesting.interface.tabTests')" name="tests">
                 <div class="script-editor-container">
-                  <el-input
+                  <CodeEditor
                     v-model="selectedRequest.post_request_script"
-                    type="textarea"
-                    :rows="10"
-                    placeholder="// 请求后脚本（Tests）：请求完成后可提取响应数据，并用 pm.environment.set('key', value) 保存/替换当前项目的环境变量，后续接口通过 {{key}} 引用"
+                    language="javascript"
+                    :placeholder="$t('apiTesting.interface.postRequestScript')"
+                    class="script-code"
                   />
                   <div class="script-buttons">
                     <el-button
@@ -386,81 +402,111 @@
 
               <el-tab-pane :label="$t('apiTesting.interface.assertions')" name="assertions">
                 <div class="assertions-editor">
-                  <div class="assertions-header">
+                  <div class="assertions-toolbar">
+                    <span class="assertions-count">
+                      {{ $t('apiTesting.interface.assertionCount') }}
+                      <b>{{ (selectedRequest.assertions || []).length }}</b>
+                      {{ $t('apiTesting.interface.assertionUnit') }}
+                    </span>
+                    <el-dropdown trigger="click" @command="addAssertionTemplate">
+                      <el-button size="small" type="primary">
+                        <el-icon><Plus /></el-icon>
+                        {{ $t('apiTesting.interface.addAssertion') }}
+                        <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="status_code_200">{{ $t('apiTesting.interface.tplStatus200') }}</el-dropdown-item>
+                          <el-dropdown-item command="status_code_400">{{ $t('apiTesting.interface.tplStatus4xx') }}</el-dropdown-item>
+                          <el-dropdown-item command="response_time">{{ $t('apiTesting.interface.tplResponseTime') }}</el-dropdown-item>
+                          <el-dropdown-item command="contains">{{ $t('apiTesting.interface.tplContains') }}</el-dropdown-item>
+                          <el-dropdown-item command="json_path_exists">{{ $t('apiTesting.interface.tplJsonExists') }}</el-dropdown-item>
+                          <el-dropdown-item command="custom" divided>{{ $t('apiTesting.interface.tplCustom') }}</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
+
+                  <p class="assertion-desc">{{ $t('apiTesting.interface.assertionDesc') }}</p>
+
+                  <div v-if="!selectedRequest.assertions || selectedRequest.assertions.length === 0" class="assertion-empty">
+                    <p>{{ $t('apiTesting.interface.noAssertions') }}</p>
                     <el-button size="small" type="primary" @click="addAssertion">
                       <el-icon><Plus /></el-icon>
-                      {{ $t('apiTesting.interface.addAssertion') }}
+                      {{ $t('apiTesting.interface.addFirstAssertion') }}
                     </el-button>
                   </div>
 
-                  <div class="assertions-list">
+                  <div v-else class="assertion-cards">
                     <div
                       v-for="(assertion, index) in selectedRequest.assertions"
                       :key="index"
-                      class="assertion-item"
+                      class="ac-card"
+                      :class="`ac-card--${assertion.type}`"
                     >
-                      <div class="assertion-header">
-                        <el-input
-                          v-model="assertion.name"
-                          :placeholder="$t('apiTesting.interface.assertionName')"
-                          size="small"
-                          class="assertion-name"
-                        />
-                        <el-button
-                          size="small"
-                          type="danger"
-                          @click="removeAssertion(index)"
-                          circle
-                        >
-                          <el-icon><Delete /></el-icon>
-                        </el-button>
+                      <div class="ac-head">
+                        <span class="ac-index">{{ index + 1 }}</span>
+
+                      <el-input
+                        v-model="assertion.name"
+                        :placeholder="$t('apiTesting.interface.assertionName')"
+                        size="small"
+                        class="ac-name"
+                      />
+
+                      <el-select
+                        v-model="assertion.type"
+                        :placeholder="$t('apiTesting.interface.selectAssertionType')"
+                        size="small"
+                        class="ac-type"
+                        @change="onAssertionTypeChange(assertion)"
+                      >
+                        <el-option :label="$t('apiTesting.interface.assertionTypes.statusCode')" value="status_code" />
+                        <el-option :label="$t('apiTesting.interface.assertionTypes.responseTime')" value="response_time" />
+                        <el-option :label="$t('apiTesting.interface.assertionTypes.contains')" value="contains" />
+                        <el-option :label="$t('apiTesting.interface.assertionTypes.jsonPath')" value="json_path" />
+                        <el-option :label="$t('apiTesting.interface.assertionTypes.header')" value="header" />
+                        <el-option :label="$t('apiTesting.interface.assertionTypes.equals')" value="equals" />
+                      </el-select>
+
                       </div>
 
-                      <div class="assertion-config">
-                        <el-select
-                          v-model="assertion.type"
-                          :placeholder="$t('apiTesting.interface.selectAssertionType')"
-                          size="small"
-                          @change="onAssertionTypeChange(assertion)"
-                        >
-                          <el-option :label="$t('apiTesting.interface.assertionTypes.statusCode')" value="status_code" />
-                          <el-option :label="$t('apiTesting.interface.assertionTypes.responseTime')" value="response_time" />
-                          <el-option :label="$t('apiTesting.interface.assertionTypes.contains')" value="contains" />
-                          <el-option :label="$t('apiTesting.interface.assertionTypes.jsonPath')" value="json_path" />
-                          <el-option :label="$t('apiTesting.interface.assertionTypes.header')" value="header" />
-                          <el-option :label="$t('apiTesting.interface.assertionTypes.equals')" value="equals" />
-                        </el-select>
-
-                        <div class="assertion-params" v-if="assertion.type">
+                      <div class="ac-body" v-if="assertion.type">
                           <!-- 状态码断言 -->
-                          <div v-if="assertion.type === 'status_code'">
+                          <div v-if="assertion.type === 'status_code'" class="at-param">
+                            <label>{{ $t('apiTesting.interface.expected') }}</label>
                             <el-input-number
                               v-model="assertion.expected"
                               :min="100"
                               :max="599"
                               size="small"
+                              controls-position="right"
                               :placeholder="$t('apiTesting.interface.expectedStatusCode')"
+                              class="at-num"
                             />
                           </div>
 
                           <!-- 响应时间断言 -->
-                          <div v-else-if="assertion.type === 'response_time'">
+                          <div v-else-if="assertion.type === 'response_time'" class="at-param">
+                            <label>{{ $t('apiTesting.interface.maxTimeMs') }}</label>
                             <el-input-number
                               v-model="assertion.expected"
                               :min="1"
                               size="small"
+                              controls-position="right"
                               :placeholder="$t('apiTesting.interface.maxResponseTime')"
+                              class="at-num"
                             />
                           </div>
 
                           <!-- 包含文本断言 -->
-                          <div v-else-if="assertion.type === 'contains'">
-                            <div style="display: flex; align-items: center; width: 100%">
+                          <div v-else-if="assertion.type === 'contains'" class="at-param">
+                            <label>{{ $t('apiTesting.interface.expectedContains') }}</label>
+                            <div class="at-input-row">
                               <el-input
                                 v-model="assertion.expected"
                                 :placeholder="$t('apiTesting.interface.expectedContains')"
                                 size="small"
-                                style="flex: 1"
                               >
                                 <template #append>
                                   <el-button
@@ -473,7 +519,7 @@
                                 </template>
                               </el-input>
                               <el-tooltip :content="$t('apiTesting.interface.insertDynamicVariable')" placement="top">
-                                <el-button size="small" style="margin-left: 5px" @click="openVariableHelperForAssertion(assertion, 'expected', index)" class="variable-helper-btn">
+                                <el-button size="small" class="at-var-btn" @click="openVariableHelperForAssertion(assertion, 'expected', index)">
                                   <el-icon><MagicStick /></el-icon>
                                 </el-button>
                               </el-tooltip>
@@ -481,79 +527,87 @@
                           </div>
 
                           <!-- JSON路径断言 -->
-                          <div v-else-if="assertion.type === 'json_path'">
-                            <el-input
-                              v-model="assertion.json_path"
-                              :placeholder="$t('apiTesting.interface.jsonPathExample')"
-                              size="small"
-                              class="assertion-input"
-                            />
-                            <div style="display: flex; align-items: center; width: 100%">
+                          <div v-else-if="assertion.type === 'json_path'" class="at-param at-param-split">
+                            <div class="at-field">
+                              <label>{{ $t('apiTesting.interface.jsonPathLabel') }}</label>
                               <el-input
-                                v-model="assertion.expected"
-                                :placeholder="$t('apiTesting.interface.expectedValue')"
+                                v-model="assertion.json_path"
+                                :placeholder="$t('apiTesting.interface.jsonPathExample')"
                                 size="small"
-                                style="flex: 1"
-                              >
-                                <template #append>
-                                  <el-button
-                                    size="small"
-                                    :icon="MagicStick"
-                                    @click="openDataFactorySelector(assertion, 'expected', index)"
-                                    :title="$t('apiTesting.interface.referDataFactory')"
-                                    class="data-factory-btn"
-                                  />
-                                </template>
-                              </el-input>
-                              <el-tooltip :content="$t('apiTesting.interface.insertDynamicVariable')" placement="top">
-                                <el-button size="small" style="margin-left: 5px" @click="openVariableHelperForAssertion(assertion, 'expected', index)" class="variable-helper-btn">
-                                  <el-icon><MagicStick /></el-icon>
-                                </el-button>
-                              </el-tooltip>
+                              />
+                            </div>
+                            <div class="at-field">
+                              <label>{{ $t('apiTesting.interface.expectedOptional') }}</label>
+                              <div class="at-input-row">
+                                <el-input
+                                  v-model="assertion.expected"
+                                  :placeholder="$t('apiTesting.interface.expectedValue')"
+                                  size="small"
+                                >
+                                  <template #append>
+                                    <el-button
+                                      size="small"
+                                      :icon="MagicStick"
+                                      @click="openDataFactorySelector(assertion, 'expected', index)"
+                                      :title="$t('apiTesting.interface.referDataFactory')"
+                                      class="data-factory-btn"
+                                    />
+                                  </template>
+                                </el-input>
+                                <el-tooltip :content="$t('apiTesting.interface.insertDynamicVariable')" placement="top">
+                                  <el-button size="small" class="at-var-btn" @click="openVariableHelperForAssertion(assertion, 'expected', index)">
+                                    <el-icon><MagicStick /></el-icon>
+                                  </el-button>
+                                </el-tooltip>
+                              </div>
                             </div>
                           </div>
 
                           <!-- 响应头断言 -->
-                          <div v-else-if="assertion.type === 'header'">
-                            <el-input
-                              v-model="assertion.header_name"
-                              :placeholder="$t('apiTesting.interface.headerNameLabel')"
-                              size="small"
-                              class="assertion-input"
-                            />
-                            <div style="display: flex; align-items: center; width: 100%">
+                          <div v-else-if="assertion.type === 'header'" class="at-param at-param-split">
+                            <div class="at-field">
+                              <label>{{ $t('apiTesting.interface.headerNameLabel') }}</label>
                               <el-input
-                                v-model="assertion.expected_value"
-                                :placeholder="$t('apiTesting.interface.expectedValue')"
+                                v-model="assertion.header_name"
+                                :placeholder="$t('apiTesting.interface.headerNameLabel')"
                                 size="small"
-                                style="flex: 1"
-                              >
-                                <template #append>
-                                  <el-button
-                                    size="small"
-                                    :icon="MagicStick"
-                                    @click="openDataFactorySelector(assertion, 'expected_value', index)"
-                                    :title="$t('apiTesting.interface.referDataFactory')"
-                                    class="data-factory-btn"
-                                  />
-                                </template>
-                              </el-input>
-                              <el-tooltip :content="$t('apiTesting.interface.insertDynamicVariable')" placement="top">
-                                <el-button size="small" style="margin-left: 5px" @click="openVariableHelperForAssertion(assertion, 'expected_value', index)" class="variable-helper-btn">
-                                  <el-icon><MagicStick /></el-icon>
-                                </el-button>
-                              </el-tooltip>
+                              />
+                            </div>
+                            <div class="at-field">
+                              <label>{{ $t('apiTesting.interface.expectedValue') }}</label>
+                              <div class="at-input-row">
+                                <el-input
+                                  v-model="assertion.expected_value"
+                                  :placeholder="$t('apiTesting.interface.expectedValue')"
+                                  size="small"
+                                >
+                                  <template #append>
+                                    <el-button
+                                      size="small"
+                                      :icon="MagicStick"
+                                      @click="openDataFactorySelector(assertion, 'expected_value', index)"
+                                      :title="$t('apiTesting.interface.referDataFactory')"
+                                      class="data-factory-btn"
+                                    />
+                                  </template>
+                                </el-input>
+                                <el-tooltip :content="$t('apiTesting.interface.insertDynamicVariable')" placement="top">
+                                  <el-button size="small" class="at-var-btn" @click="openVariableHelperForAssertion(assertion, 'expected_value', index)">
+                                    <el-icon><MagicStick /></el-icon>
+                                  </el-button>
+                                </el-tooltip>
+                              </div>
                             </div>
                           </div>
 
                           <!-- 完全匹配断言 -->
-                          <div v-else-if="assertion.type === 'equals'">
-                            <div style="display: flex; align-items: center; width: 100%">
+                          <div v-else-if="assertion.type === 'equals'" class="at-param">
+                            <label>{{ $t('apiTesting.interface.expectedMatch') }}</label>
+                            <div class="at-input-row">
                               <el-input
                                 v-model="assertion.expected"
                                 :placeholder="$t('apiTesting.interface.expectedMatch')"
                                 size="small"
-                                style="flex: 1"
                               >
                                 <template #append>
                                   <el-button
@@ -566,22 +620,46 @@
                                 </template>
                               </el-input>
                               <el-tooltip :content="$t('apiTesting.interface.insertDynamicVariable')" placement="top">
-                                <el-button size="small" style="margin-left: 5px" @click="openVariableHelperForAssertion(assertion, 'expected', index)" class="variable-helper-btn">
+                                <el-button size="small" class="at-var-btn" @click="openVariableHelperForAssertion(assertion, 'expected', index)">
                                   <el-icon><MagicStick /></el-icon>
                                 </el-button>
                               </el-tooltip>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div v-if="!selectedRequest.assertions || selectedRequest.assertions.length === 0" class="no-assertions">
-                      <p>{{ $t('apiTesting.interface.noAssertions') }}</p>
-                      <el-button size="small" type="primary" @click="addAssertion">
-                        <el-icon><Plus /></el-icon>
-                        {{ $t('apiTesting.interface.addFirstAssertion') }}
-                      </el-button>
+                      <div class="ac-ops">
+                        <el-tooltip :content="$t('apiTesting.interface.moveUp')" placement="top">
+                          <el-button
+                            size="small"
+                            text
+                            :disabled="index === 0"
+                            @click="moveAssertion(index, -1)"
+                          >
+                            <el-icon><ArrowUp /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                        <el-tooltip :content="$t('apiTesting.interface.moveDown')" placement="top">
+                          <el-button
+                            size="small"
+                            text
+                            :disabled="index === selectedRequest.assertions.length - 1"
+                            @click="moveAssertion(index, 1)"
+                          >
+                            <el-icon><ArrowDown /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                        <el-tooltip :content="$t('apiTesting.interface.duplicate')" placement="top">
+                          <el-button size="small" text @click="duplicateAssertion(index)">
+                            <el-icon><CopyDocument /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                        <el-tooltip :content="$t('apiTesting.common.delete')" placement="top">
+                          <el-button size="small" text type="danger" @click="removeAssertion(index)">
+                            <el-icon><Close /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -590,7 +668,7 @@
 
             <!-- WebSocket接口专用标签页 -->
             <template v-else-if="selectedRequest && selectedRequest.request_type === 'WEBSOCKET'">
-              <el-tab-pane label="Message" name="message">
+              <el-tab-pane :label="$t('apiTesting.interface.tabMessage')" name="message">
                 <div class="message-container">
                   <div class="message-input-section">
                     <el-select
@@ -598,9 +676,9 @@
                       :placeholder="$t('apiTesting.interface.messageType')"
                       style="width: 150px; margin-bottom: 15px;"
                     >
-                      <el-option label="Text" value="text" />
-                      <el-option label="JSON" value="json" />
-                      <el-option label="Binary" value="binary" />
+                      <el-option :label="$t('apiTesting.interface.rawText')" value="text" />
+                      <el-option :label="$t('apiTesting.interface.rawJson')" value="json" />
+                      <el-option :label="$t('apiTesting.interface.respBinary')" value="binary" />
                     </el-select>
 
                     <div v-if="websocketMessageType === 'text' || websocketMessageType === 'json'">
@@ -692,11 +770,11 @@
               </div>
             </div>
             <el-tabs v-show="actualRequestExpanded" v-model="actualRequestActiveTab" class="panel-tabs">
-              <el-tab-pane label="Headers" name="headers">
+              <el-tab-pane :label="$t('apiTesting.interface.tabHeaders')" name="headers">
                 <div class="kv-list">
                   <div class="kv-head">
-                    <span>Key</span>
-                    <span>Value</span>
+                    <span>{{ $t('apiTesting.interface.kvKey') }}</span>
+                    <span>{{ $t('apiTesting.interface.kvValue') }}</span>
                   </div>
                   <div v-for="(value, key) in (actualRequestData?.headers || {})" :key="key" class="kv-row">
                     <span class="kv-key">{{ key }}</span>
@@ -707,11 +785,11 @@
                   </div>
                 </div>
               </el-tab-pane>
-              <el-tab-pane label="Params" name="params">
+              <el-tab-pane :label="$t('apiTesting.interface.tabParams')" name="params">
                 <div class="kv-list">
                   <div class="kv-head">
-                    <span>Key</span>
-                    <span>Value</span>
+                    <span>{{ $t('apiTesting.interface.kvKey') }}</span>
+                    <span>{{ $t('apiTesting.interface.kvValue') }}</span>
                   </div>
                   <div v-for="(value, key) in (actualRequestParams || {})" :key="key" class="kv-row">
                     <span class="kv-key">{{ key }}</span>
@@ -722,7 +800,7 @@
                   </div>
                 </div>
               </el-tab-pane>
-              <el-tab-pane label="Body" name="body">
+              <el-tab-pane :label="$t('apiTesting.interface.tabBody')" name="body">
                 <div v-if="hasEntries(actualRequestData?.body)" class="code-block">
                   <pre>{{ formatRequestPart(actualRequestData?.body) }}</pre>
                 </div>
@@ -748,7 +826,7 @@
               </div>
             </div>
             <el-tabs v-show="responseExpanded" v-model="responseActiveTab" class="panel-tabs">
-              <el-tab-pane label="Body" name="body">
+              <el-tab-pane :label="$t('apiTesting.interface.tabBody')" name="body">
                 <div class="response-body">
                   <div class="response-actions">
                     <el-button-group>
@@ -781,7 +859,7 @@
                 </div>
               </el-tab-pane>
 
-              <el-tab-pane label="Headers" name="headers">
+              <el-tab-pane :label="$t('apiTesting.interface.tabHeaders')" name="headers">
                 <div class="response-headers">
                   <div v-for="(value, key) in (response.response_data?.headers || {})" :key="key" class="header-row">
                     <strong>{{ key }}:</strong> {{ value }}
@@ -867,57 +945,234 @@
       </div>
     </div>
 
-    <!-- 创建集合对话框 -->
-    <el-dialog v-model="showCreateCollectionDialog" :title="$t('apiTesting.interface.createCollection')" :close-on-click-modal="false" :close-on-press-escape="false" :modal="true" :destroy-on-close="false" width="500px">
-      <el-form ref="collectionFormRef" :model="collectionForm" :rules="collectionRules" label-width="100px">
-        <el-form-item :label="$t('apiTesting.interface.collectionName')" prop="name">
-          <el-input v-model="collectionForm.name" :placeholder="$t('apiTesting.interface.inputCollectionName')" />
-        </el-form-item>
-        <el-form-item :label="$t('apiTesting.common.description')" prop="description">
-          <el-input v-model="collectionForm.description" type="textarea" :rows="3" :placeholder="`${$t('apiTesting.common.pleaseInput')}${$t('apiTesting.common.description')}`" />
-        </el-form-item>
-        <el-form-item :label="$t('apiTesting.interface.parentCollection')" prop="parent">
-          <el-select v-model="collectionForm.parent" :placeholder="$t('apiTesting.interface.selectParentCollection')" clearable>
-            <el-option
-              v-for="collection in flatCollections"
-              :key="collection.id"
-              :label="collection.name"
-              :value="collection.id"
+    <!-- 创建接口对话框 -->
+    <el-dialog
+      v-model="showCreateRequestDialog"
+      width="680px"
+      class="im-dialog"
+      :show-close="false"
+      :close-on-click-modal="false"
+      align-center
+    >
+      <template #header>
+        <div class="dlg-head">
+          <div class="dlg-head-icon dlg-head-icon--green">
+            <el-icon><Plus /></el-icon>
+          </div>
+          <div class="dlg-head-text">
+            <h3>{{ $t('apiTesting.interface.createNewInterface') }}</h3>
+            <p>{{ $t('apiTesting.interface.createInterfaceSubtitle') }}</p>
+          </div>
+          <el-icon class="dlg-head-close" @click="showCreateRequestDialog = false"><Close /></el-icon>
+        </div>
+      </template>
+
+      <el-form :model="requestCreateForm" label-position="top" class="im-form">
+        <section class="form-section">
+          <div class="section-title">
+            <i class="section-dot" />
+            {{ $t('apiTesting.interface.basicInfo') }}
+          </div>
+          <el-form-item :label="$t('apiTesting.interface.requestName')" required>
+            <el-input
+              v-model="requestCreateForm.name"
+              :placeholder="$t('apiTesting.interface.interfaceNamePlaceholder')"
             />
-          </el-select>
-        </el-form-item>
+          </el-form-item>
+          <div class="grid-2">
+            <el-form-item :label="$t('apiTesting.interface.method')">
+              <el-select v-model="requestCreateForm.method" style="width: 100%">
+                <el-option v-for="m in availableMethods" :key="m" :label="m" :value="m" />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="$t('apiTesting.interface.belongCollection')">
+              <el-select
+                v-model="requestCreateForm.collection"
+                clearable
+                :placeholder="$t('apiTesting.interface.selectCollection')"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="collection in flatCollections"
+                  :key="collection.id"
+                  :label="collection.name"
+                  :value="collection.id"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+          <el-form-item :label="$t('apiTesting.interface.url')">
+            <el-input
+              v-model="requestCreateForm.url"
+              :placeholder="$t('apiTesting.interface.requestUrlPlaceholder')"
+            >
+              <template #prepend>{{ requestCreateForm.method }}</template>
+            </el-input>
+            <div class="form-tip">{{ $t('apiTesting.interface.requestUrlTip') }}</div>
+          </el-form-item>
+        </section>
       </el-form>
 
       <template #footer>
-        <el-button @click="closeCreateCollectionDialog">{{ $t('apiTesting.common.cancel') }}</el-button>
-        <el-button type="primary" @click="createCollection">{{ $t('apiTesting.common.create') }}</el-button>
+        <div class="dlg-footer">
+          <span class="dlg-footer-hint">{{ $t('apiTesting.interface.createInterfaceHint') }}</span>
+          <div class="dlg-footer-actions">
+            <el-button @click="showCreateRequestDialog = false">{{ $t('apiTesting.common.cancel') }}</el-button>
+            <el-button type="primary" @click="confirmCreateRequest">
+              <el-icon><Plus /></el-icon>
+              {{ $t('apiTesting.interface.createInterface') }}
+            </el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 创建集合对话框 -->
+    <el-dialog
+      v-model="showCreateCollectionDialog"
+      width="600px"
+      class="im-dialog"
+      :show-close="false"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      align-center
+    >
+      <template #header>
+        <div class="dlg-head">
+          <div class="dlg-head-icon">
+            <el-icon><Folder /></el-icon>
+          </div>
+          <div class="dlg-head-text">
+            <h3>{{ $t('apiTesting.interface.createCollection') }}</h3>
+            <p>{{ $t('apiTesting.interface.createCollectionSubtitle') }}</p>
+          </div>
+          <el-icon class="dlg-head-close" @click="closeCreateCollectionDialog"><Close /></el-icon>
+        </div>
+      </template>
+
+      <el-form
+        ref="collectionFormRef"
+        :model="collectionForm"
+        :rules="collectionRules"
+        label-position="top"
+        class="im-form"
+      >
+        <section class="form-section">
+          <div class="section-title">
+            <i class="section-dot" />
+            {{ $t('apiTesting.interface.basicInfo') }}
+          </div>
+          <el-form-item :label="$t('apiTesting.interface.collectionName')" prop="name">
+            <el-input v-model="collectionForm.name" :placeholder="$t('apiTesting.interface.inputCollectionName')" />
+          </el-form-item>
+          <el-form-item :label="$t('apiTesting.common.description')" prop="description">
+            <el-input
+              v-model="collectionForm.description"
+              type="textarea"
+              :rows="3"
+              :placeholder="`${$t('apiTesting.common.pleaseInput')}${$t('apiTesting.common.description')}`"
+            />
+          </el-form-item>
+          <el-form-item :label="$t('apiTesting.interface.parentCollection')" prop="parent">
+            <el-select
+              v-model="collectionForm.parent"
+              :placeholder="$t('apiTesting.interface.selectParentCollection')"
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="collection in flatCollections"
+                :key="collection.id"
+                :label="collection.name"
+                :value="collection.id"
+              />
+            </el-select>
+            <div class="form-tip">{{ $t('apiTesting.interface.noCollection') }}</div>
+          </el-form-item>
+        </section>
+      </el-form>
+
+      <template #footer>
+        <div class="dlg-footer">
+          <div class="dlg-footer-actions" style="margin-left: auto">
+            <el-button @click="closeCreateCollectionDialog">{{ $t('apiTesting.common.cancel') }}</el-button>
+            <el-button type="primary" @click="createCollection">{{ $t('apiTesting.common.create') }}</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
     <!-- 编辑集合对话框 -->
-    <el-dialog v-model="showEditCollectionDialog" :title="$t('apiTesting.interface.editCollection')" :close-on-click-modal="false" width="500px">
-      <el-form ref="editCollectionFormRef" :model="editCollectionForm" :rules="collectionRules" label-width="100px">
-        <el-form-item :label="$t('apiTesting.interface.collectionName')" prop="name">
-          <el-input v-model="editCollectionForm.name" :placeholder="$t('apiTesting.interface.inputCollectionName')" />
-        </el-form-item>
-        <el-form-item :label="$t('apiTesting.common.description')" prop="description">
-          <el-input v-model="editCollectionForm.description" type="textarea" :rows="3" :placeholder="`${$t('apiTesting.common.pleaseInput')}${$t('apiTesting.common.description')}`" />
-        </el-form-item>
-        <el-form-item :label="$t('apiTesting.interface.parentCollection')" prop="parent">
-          <el-select v-model="editCollectionForm.parent" :placeholder="$t('apiTesting.interface.selectParentCollection')" clearable>
-            <el-option
-              v-for="collection in flatCollections.filter(c => c.id !== editCollectionForm.id)"
-              :key="collection.id"
-              :label="collection.name"
-              :value="collection.id"
+    <el-dialog
+      v-model="showEditCollectionDialog"
+      width="600px"
+      class="im-dialog"
+      :show-close="false"
+      :close-on-click-modal="false"
+      align-center
+    >
+      <template #header>
+        <div class="dlg-head">
+          <div class="dlg-head-icon dlg-head-icon--blue">
+            <el-icon><Folder /></el-icon>
+          </div>
+          <div class="dlg-head-text">
+            <h3>{{ $t('apiTesting.interface.editCollection') }}</h3>
+            <p>{{ $t('apiTesting.interface.editCollectionSubtitle') }}</p>
+          </div>
+          <el-icon class="dlg-head-close" @click="closeEditCollectionDialog"><Close /></el-icon>
+        </div>
+      </template>
+
+      <el-form
+        ref="editCollectionFormRef"
+        :model="editCollectionForm"
+        :rules="collectionRules"
+        label-position="top"
+        class="im-form"
+      >
+        <section class="form-section">
+          <div class="section-title">
+            <i class="section-dot" />
+            {{ $t('apiTesting.interface.basicInfo') }}
+          </div>
+          <el-form-item :label="$t('apiTesting.interface.collectionName')" prop="name">
+            <el-input v-model="editCollectionForm.name" :placeholder="$t('apiTesting.interface.inputCollectionName')" />
+          </el-form-item>
+          <el-form-item :label="$t('apiTesting.common.description')" prop="description">
+            <el-input
+              v-model="editCollectionForm.description"
+              type="textarea"
+              :rows="3"
+              :placeholder="`${$t('apiTesting.common.pleaseInput')}${$t('apiTesting.common.description')}`"
             />
-          </el-select>
-        </el-form-item>
+          </el-form-item>
+          <el-form-item :label="$t('apiTesting.interface.parentCollection')" prop="parent">
+            <el-select
+              v-model="editCollectionForm.parent"
+              :placeholder="$t('apiTesting.interface.selectParentCollection')"
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="collection in flatCollections.filter(c => c.id !== editCollectionForm.id)"
+                :key="collection.id"
+                :label="collection.name"
+                :value="collection.id"
+              />
+            </el-select>
+            <div class="form-tip">{{ $t('apiTesting.interface.noCollection') }}</div>
+          </el-form-item>
+        </section>
       </el-form>
 
       <template #footer>
-        <el-button @click="closeEditCollectionDialog">{{ $t('apiTesting.common.cancel') }}</el-button>
-        <el-button type="primary" @click="editCollection">{{ $t('apiTesting.common.save') }}</el-button>
+        <div class="dlg-footer">
+          <div class="dlg-footer-actions" style="margin-left: auto">
+            <el-button @click="closeEditCollectionDialog">{{ $t('apiTesting.common.cancel') }}</el-button>
+            <el-button type="primary" @click="editCollection">{{ $t('apiTesting.common.save') }}</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -980,19 +1235,42 @@
     <!-- CURL导入对话框 -->
     <el-dialog
       v-model="showCurlImportDialog"
-      :title="$t('apiTesting.interface.importCurlCommand')"
       width="800px"
+      class="im-dialog"
+      :show-close="false"
       :close-on-click-modal="false"
+      align-center
     >
-      <el-input
+      <template #header>
+        <div class="dlg-head">
+          <div class="dlg-head-icon dlg-head-icon--blue">
+            <el-icon><Document /></el-icon>
+          </div>
+          <div class="dlg-head-text">
+            <h3>{{ $t('apiTesting.interface.importCurlCommand') }}</h3>
+            <p>{{ $t('apiTesting.interface.curlImportSubtitle') }}</p>
+          </div>
+          <el-icon class="dlg-head-close" @click="closeCurlImportDialog"><Close /></el-icon>
+        </div>
+      </template>
+
+      <CodeEditor
         v-model="curlCommand"
-        type="textarea"
-        :rows="15"
+        language="text"
         :placeholder="$t('apiTesting.interface.pasteCurlCommand')"
+        class="curl-editor"
       />
+
       <template #footer>
-        <el-button @click="closeCurlImportDialog">{{ $t('apiTesting.common.cancel') }}</el-button>
-        <el-button type="primary" @click="parseAndImportCurl">{{ $t('apiTesting.interface.parseAndImport') }}</el-button>
+        <div class="dlg-footer">
+          <span class="dlg-footer-hint">{{ $t('apiTesting.interface.curlImportHint') }}</span>
+          <div class="dlg-footer-actions">
+            <el-button @click="closeCurlImportDialog">{{ $t('apiTesting.common.cancel') }}</el-button>
+            <el-button type="primary" @click="parseAndImportCurl">
+              {{ $t('apiTesting.interface.parseAndImport') }}
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -1052,7 +1330,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Folder, Document, MagicStick, Search, Close, ArrowRight } from '@element-plus/icons-vue'
+import {
+  Plus, Folder, Document, MagicStick, Search, Close, ArrowRight,
+  ArrowUp, ArrowDown, CopyDocument
+} from '@element-plus/icons-vue'
 import api from '@/utils/api'
 import KeyValueEditor from './components/KeyValueEditor.vue'
 import DataFactorySelector from '@/components/DataFactorySelector.vue'
@@ -1393,7 +1674,9 @@ const loadRequests = async () => {
       method: r.method,
       request_type: r.request_type,
       url: r.url,
-      collection: r.collection
+      collection: r.collection,
+      ai_generated: r.ai_generated,
+      ai_source_request_name: r.ai_source_request_name
     })
 
     requests.forEach(request => {
@@ -1528,9 +1811,91 @@ const onNodeCollapse = (node) => {
   expandedKeys.value = expandedKeys.value.filter(key => key !== node.id)
 }
 
+// ---------- 新建接口弹窗 ----------
+
+const showCreateRequestDialog = ref(false)
+const requestCreateForm = reactive({
+  name: '',
+  collection: null,
+  method: 'GET',
+  url: ''
+})
+
+const openCreateRequestDialog = (collectionId = null) => {
+  if (!selectedProject.value) {
+    ElMessage.warning(t('apiTesting.interface.selectProjectFirst'))
+    return
+  }
+  requestCreateForm.name = ''
+  requestCreateForm.collection = collectionId
+  requestCreateForm.method = 'GET'
+  requestCreateForm.url = ''
+  showCreateRequestDialog.value = true
+}
+
+// 把后端的校验错误翻译成人话：
+// {'url': ['该字段不能为空。']} -> 'url: 该字段不能为空。'
+// 之前所有 catch 都写死「保存失败」，把后端原因吞了，排查全靠猜
+const formatApiError = (error, fallback = '操作失败') => {
+  const data = error?.response?.data
+  if (!data) return fallback
+  if (typeof data === 'string') return data
+  if (data.error) return data.error
+  if (data.detail) return data.detail
+  const parts = Object.entries(data).map(([field, val]) => {
+    const text = Array.isArray(val) ? val.join('，') : String(val)
+    return `${field}: ${text}`
+  })
+  return parts.length ? parts.join('；') : fallback
+}
+
+const confirmCreateRequest = async () => {
+  const name = (requestCreateForm.name || '').trim()
+  const url = (requestCreateForm.url || '').trim()
+  if (!name) {
+    ElMessage.warning(t('apiTesting.interface.interfaceNameRequired'))
+    return
+  }
+  if (!url) {
+    ElMessage.warning(t('apiTesting.interface.urlRequired'))
+    return
+  }
+
+  // 这里必须真正调接口落库。原来只改了前端内存对象就提示「创建成功」，
+  // 刷新页面接口就没了，看起来像「新增了但功能不对」
+  try {
+    const { data } = await api.post('/api-testing/requests/', {
+      name,
+      url,
+      method: requestCreateForm.method,
+      collection: requestCreateForm.collection || null,
+      request_type: 'HTTP',
+      params: {},
+      headers: [],
+      body: { type: 'none', data: null },
+      pre_request_script: '',
+      post_request_script: '',
+      assertions: [{ name: '状态码断言', type: 'status_code', expected: 200 }]
+    })
+
+    selectedRequest.value = data
+    showCreateRequestDialog.value = false
+    ElMessage.success(t('apiTesting.interface.interfaceCreatedTip'))
+
+    await loadCollections(selectedProject.value)
+    if (data.collection && !expandedKeys.value.includes(data.collection)) {
+      expandedKeys.value.push(data.collection)
+    }
+    await onNodeClick({ id: data.id, type: 'request' })
+  } catch (error) {
+    ElMessage.error(`创建失败：${formatApiError(error)}`)
+    console.error('创建接口失败:', error)
+  }
+}
+
 const createEmptyRequest = () => {
   if (!selectedProject.value) {
-    ElMessage.warning('请先选择项目')
+    ElMessage.warning(t('apiTesting.interface.selectProjectFirst'))
     return
   }
 
@@ -1589,21 +1954,7 @@ const addRequest = () => {
     return
   }
 
-  const newRequest = {
-    id: null,
-    collection: parentNode.id,
-    name: '未命名接口',
-    url: '',
-    method: 'GET',
-    params: {},
-    headers: {},
-    pre_request_script: '',
-    post_request_script: '',
-    assertions: [{ name: '状态码断言', type: 'status_code', expected: 200 }],
-    request_type: 'HTTP'
-  }
-
-  selectedRequest.value = newRequest
+  openCreateRequestDialog(parentNode.id)
   showContextMenu.value = false
 }
 
@@ -2472,7 +2823,7 @@ const saveRequest = async () => {
     await loadCollections(selectedProject.value)
     ElMessage.success('保存成功')
   } catch (error) {
-    ElMessage.error('保存失败')
+    ElMessage.error(`保存失败：${formatApiError(error)}`)
     console.error('保存失败:', error)
   } finally {
     saving.value = false
@@ -2558,6 +2909,61 @@ const removeAssertion = (index) => {
   if (!selectedRequest.value || !selectedRequest.value.assertions) return
 
   selectedRequest.value.assertions.splice(index, 1)
+}
+
+const moveAssertion = (index, offset) => {
+  const list = selectedRequest.value?.assertions
+  if (!list) return
+  const target = index + offset
+  if (target < 0 || target >= list.length) return
+  const [item] = list.splice(index, 1)
+  list.splice(target, 0, item)
+}
+
+const duplicateAssertion = (index) => {
+  const list = selectedRequest.value?.assertions
+  if (!list) return
+  list.splice(index + 1, 0, JSON.parse(JSON.stringify(list[index])))
+}
+
+// 常用断言模板：一键生成，避免每次手工选类型填参数
+const addAssertionTemplate = (command) => {
+  if (!selectedRequest.value) return
+  if (!selectedRequest.value.assertions) {
+    selectedRequest.value.assertions = []
+  }
+  const list = selectedRequest.value.assertions
+  const seq = list.length + 1
+
+  const templates = {
+    status_code_200: {
+      name: `${t('apiTesting.interface.assertion')}${seq}`,
+      type: 'status_code', expected: 200,
+    },
+    status_code_400: {
+      name: `异常场景-返回400-${seq}`,
+      type: 'status_code', expected: 400,
+    },
+    response_time: {
+      name: `响应时间小于500ms-${seq}`,
+      type: 'response_time', expected: 500,
+    },
+    contains: {
+      name: `响应包含指定内容-${seq}`,
+      type: 'contains', expected: '',
+    },
+    json_path_exists: {
+      name: `JSON字段存在-${seq}`,
+      type: 'json_path', json_path: '', expected: null,
+    },
+    custom: {
+      name: `${t('apiTesting.interface.assertion')}${seq}`,
+      type: 'status_code', expected: 200,
+    },
+  }
+
+  const template = templates[command]
+  if (template) list.push({ ...template })
 }
 
 const onAssertionTypeChange = (assertion) => {
@@ -3418,6 +3824,28 @@ const useLocalVariableCategories = () => {
   padding: 4px 0;
 }
 
+/* AI 用例中心采纳进来的接口标记 */
+.ai-tag {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #6d5efc, #4a8cff);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
+.ai-origin-tag {
+  flex-shrink: 0;
+  border-color: #cfc9fb;
+  color: #5a4ff0;
+  background: #f4f2ff;
+}
+
 /* 防止长接口名撑开 el-tree 节点容器，确保右侧请求方式标签始终可见 */
 .collection-tree :deep(.el-tree-node__content) {
   min-width: 0;
@@ -4212,6 +4640,13 @@ const useLocalVariableCategories = () => {
   line-height: 1.6;
 }
 
+.script-code {
+  height: 300px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e4e7ed;
+}
+
 /* 脚本按钮 */
 .script-buttons {
   position: absolute;
@@ -4319,39 +4754,230 @@ const useLocalVariableCategories = () => {
 
 /* 断言编辑器 */
 .assertions-editor {
-  padding: 20px;
+  padding: 16px;
   background: #f8f9fa;
   border-radius: 12px;
   border: 1px solid #e9ecef;
 }
 
-.assertions-header {
+.assertions-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #e9ecef;
 }
 
-.assertions-header .el-button {
-  border-radius: 8px;
-  background: #5046e5;
-  border: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
+.assertions-count {
+  font-size: 13px;
+  color: #6b7280;
 }
 
-.assertions-header .el-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(80, 70, 229, 0.4);
-  background: #4338ca;
+.assertions-count b {
+  margin: 0 2px;
+  font-size: 14px;
+  color: #5046e5;
 }
 
-.assertions-list {
+.assertion-desc {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.assertion-empty {
+  padding: 28px 16px;
+  text-align: center;
+  border: 1px dashed #d6dae2;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.assertion-empty p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #909399;
+}
+
+/* 断言卡片列表 */
+.assertion-cards {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+}
+
+.ac-card {
+  position: relative;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #eceef5;
+  border-left: 3px solid #d8dcea;
+  border-radius: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.ac-card:hover {
+  border-color: #cfcaf7;
+  box-shadow: 0 4px 16px rgba(80, 70, 229, 0.1);
+}
+
+.ac-card--status_code {
+  border-left-color: #4a8cff;
+}
+
+.ac-card--response_time {
+  border-left-color: #e6a23c;
+}
+
+.ac-card--contains {
+  border-left-color: #8a90a8;
+}
+
+.ac-card--json_path {
+  border-left-color: #34c47c;
+}
+
+.ac-card--header {
+  border-left-color: #a86cf0;
+}
+
+.ac-card--equals {
+  border-left-color: #f2736f;
+}
+
+.ac-head {
+  display: grid;
+  /* 最后一列留给右上角悬浮的操作按钮 */
+  grid-template-columns: 26px minmax(160px, 1fr) 168px 96px;
+  gap: 12px;
+  align-items: center;
+}
+
+.ac-index {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f1f2f9;
+  color: #7b819c;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+}
+
+.ac-type {
+  width: 100%;
+}
+
+.ac-name :deep(.el-input__wrapper) {
+  box-shadow: none;
+  background: transparent;
+  padding-left: 0;
+}
+
+.ac-name :deep(.el-input__wrapper:hover),
+.ac-name :deep(.el-input__wrapper.is-focus) {
+  background: #fff;
+  box-shadow: 0 0 0 1px #c9c4f5 inset;
+  padding-left: 8px;
+}
+
+.ac-name :deep(.el-input__inner) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2f3450;
+}
+
+.ac-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #eef0f7;
+}
+
+.ac-ops {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ac-card:hover .ac-ops {
+  opacity: 1;
+}
+
+.ac-ops :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.at-param {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.at-param > label {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #7b819c;
+  white-space: nowrap;
+}
+
+.at-param-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.at-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.at-field > label {
+  font-size: 12px;
+  color: #7b819c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.at-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.at-input-row .el-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.at-num {
+  width: 130px;
+}
+
+.at-var-btn {
+  flex-shrink: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.at-param > label {
+  min-width: 76px;
+}
+
+.at-param-split {
+  gap: 12px 20px;
 }
 
 /* 断言项 */
@@ -5200,4 +5826,159 @@ const useLocalVariableCategories = () => {
   margin-bottom: 12px;
 }
 
+/* ---------- 弹窗（新建接口 / 集合 / cURL 导入） ---------- */
+.dlg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dlg-head-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #6d5efc, #4a8cff);
+  box-shadow: 0 6px 16px rgba(99, 88, 246, 0.3);
+}
+
+.dlg-head-icon--green {
+  background: linear-gradient(135deg, #34d399, #22b573);
+  box-shadow: 0 6px 16px rgba(34, 181, 115, 0.3);
+}
+
+.dlg-head-icon--blue {
+  background: linear-gradient(135deg, #4a8cff, #2f6fe4);
+  box-shadow: 0 6px 16px rgba(58, 122, 240, 0.3);
+}
+
+.dlg-head-text h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1f2440;
+}
+
+.dlg-head-text p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #8a90a8;
+}
+
+.dlg-head-close {
+  margin-left: auto;
+  font-size: 18px;
+  color: #98a0b8;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.dlg-head-close:hover {
+  color: #4a4f6a;
+}
+
+.im-form :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+.im-form :deep(.el-form-item__label) {
+  font-size: 13px;
+  font-weight: 600;
+  color: #454a63;
+  line-height: 1.4;
+  padding-bottom: 6px;
+}
+
+.form-section + .form-section {
+  margin-top: 6px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #7b819c;
+}
+
+.section-dot {
+  display: inline-block;
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #6d5efc, #4a8cff);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+}
+
+.form-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.dlg-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dlg-footer-hint {
+  margin-right: auto;
+  font-size: 12px;
+  color: #9aa0b8;
+}
+
+.dlg-footer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.curl-editor {
+  height: 300px;
+  border: 1px solid #e4e7ed;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+</style>
+
+<style>
+/* 弹窗挂载在 body 上，外壳样式需要非 scoped 才能命中 */
+.im-dialog {
+  padding: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(24, 30, 66, 0.18);
+}
+
+.im-dialog .el-dialog__header {
+  margin: 0;
+  padding: 20px 24px 16px;
+  background: linear-gradient(135deg, #f6f4ff 0%, #eef5ff 100%);
+  border-bottom: 1px solid #edeff8;
+}
+
+.im-dialog .el-dialog__body {
+  padding: 18px 24px 4px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.im-dialog .el-dialog__footer {
+  padding: 14px 24px 18px;
+  background: #fbfbfe;
+  border-top: 1px solid #edeff8;
+}
 </style>

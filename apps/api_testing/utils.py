@@ -240,22 +240,13 @@ def execute_test_suite(test_suite, environment, executed_by):
             api_request = suite_request.request
 
             try:
-                # 变量全部来自环境：缺失时把该条记为失败并继续执行后续请求
+                # 变量来自环境（含全局环境兜底）。缺失不再中断：按原数据继续请求，
+                # 由上游决定成败，缺失只记日志
                 parts, missing = prepare_request_parts(api_request, environment, resolver)
                 if missing:
-                    failed_count += 1
-                    results.append({
-                        'name': api_request.name,
-                        'method': api_request.method,
-                        'url': api_request.url,
-                        'passed': False,
-                        'status_code': None,
-                        'response_time': 0,
-                        'error': ('环境「%s」缺少变量：%s。变量必须全部来自环境'
-                                  % (environment.name if environment else '未指定',
-                                     '、'.join('{{%s}}' % m for m in missing))),
-                    })
-                    continue
+                    logger.warning(
+                        '接口[id=%s] 引用了未定义变量 %s，按原数据继续请求',
+                        api_request.id, '、'.join(missing))
 
                 variables = parts['variables']
                 url = parts['url']
@@ -480,19 +471,13 @@ def execute_api_request(api_request, environment, executed_by, save_history=True
         # 创建变量解析器
         resolver = VariableResolver()
 
-        # 变量全部来自环境：先统一解析（含变量间引用），缺失则直接中断，避免把 {{xxx}} 原样发出去
+        # 变量来自环境（含全局环境兜底）。缺失不再中断：按原数据继续请求，
+        # 成败交给上游；缺失只记日志，既不阻断执行也便于事后排查
         parts, missing = prepare_request_parts(api_request, environment, resolver)
         if missing:
-            return {
-                'success': False,
-                'error': (f'环境「{environment.name if environment else "未指定"}」缺少变量：'
-                          + '、'.join('{{%s}}' % m for m in missing)
-                          + '。变量必须全部来自环境，请在环境管理中补充后重试。'),
-                'missing_variables': missing,
-                'status_code': None,
-                'response_time': 0,
-                'assertions_results': [],
-            }
+            logger.warning(
+                '接口[id=%s] 引用了未定义变量 %s，按原数据继续请求',
+                getattr(api_request, 'id', None), '、'.join(missing))
 
         variables = parts['variables']
         url = parts['url']
@@ -576,6 +561,15 @@ def execute_api_request(api_request, environment, executed_by, save_history=True
                             if file_path:
                                 files.append((file_key, open(file_path, 'rb')))
 
+        # 实际发出的请求（变量已解析），供前端展示「实际请求」
+        request_payload = {
+            'url': url,
+            'method': api_request.method,
+            'headers': headers,
+            'params': params,
+            'body': body_data,
+        }
+
         # 执行请求
         start_time = time.time()
         response = requests.request(
@@ -643,13 +637,7 @@ def execute_api_request(api_request, environment, executed_by, save_history=True
             history = RequestHistory.objects.create(
                 request=api_request,
                 environment=environment,
-                request_data={
-                    'url': url,
-                    'method': api_request.method,
-                    'headers': headers,
-                    'params': params,
-                    'body': body_data
-                },
+                request_data=request_payload,
                 response_data={
                     'headers': dict(response.headers),
                     'body': response.text,
@@ -672,6 +660,7 @@ def execute_api_request(api_request, environment, executed_by, save_history=True
                 'history_id': history.id if history else None,
                 'status_code': response.status_code,
                 'response_time': response_time,
+                'request_data': request_payload,
                 'response_data': {
                     'headers': dict(response.headers),
                     'body': response.text,
@@ -687,6 +676,7 @@ def execute_api_request(api_request, environment, executed_by, save_history=True
             'response_time': response_time,
             'assertions_results': assertions_results,
             'tests_result': tests_result,
+            'request_data': request_payload,
             'response_data': {
                 'headers': dict(response.headers),
                 'body': response.text,
@@ -703,6 +693,17 @@ def execute_api_request(api_request, environment, executed_by, save_history=True
         }
 
 
+def variable_aliases(key):
+    """变量名的等价写法：下划线与连字符互通。
+
+    环境里配的是 host_test，接口 URL 里却常写成 {host-test}，
+    两者应视为同一个变量；否则 {host-test} 会原样保留，URL 缺协议，请求必然失败。
+    """
+    key = str(key)
+    forms = [key, key.replace('_', '-'), key.replace('-', '_')]
+    return list(dict.fromkeys(forms))  # 去重且保持顺序
+
+
 def _replace_variables(text, variables):
     """替换文本中的变量"""
     if not isinstance(text, str):
@@ -717,8 +718,10 @@ def _replace_variables(text, variables):
         # 兼容单花括号 {key} 写法（如 URL 路径参数 /path/{assistantCode}）：
         # 必须先替换双花括号 {{key}}，再替换单花括号 {key}，
         # 否则 {{key}} 内部的 {key} 会被单括号规则先命中，导致外层花括号残留。
-        result = result.replace(f'{{{{{key}}}}}', replacement)
-        result = result.replace(f'{{{key}}}', replacement)
+        # 同时按别名替换，让 {host-test} 也能命中环境里的 host_test。
+        for name in variable_aliases(key):
+            result = result.replace(f'{{{{{name}}}}}', replacement)
+            result = result.replace(f'{{{name}}}', replacement)
     return result
 
 
@@ -967,6 +970,34 @@ def _build_body(api_request, variables, resolver=None):
     return body_type, body_data, files
 
 
+def collect_global_variables(api_request):
+    """取全局环境变量（scope=GLOBAL），按「项目级优先、跨项目兜底」合并。
+
+    host_test 这类域名变量通常配在不绑定项目(project=None)的全局环境里，
+    只按当前项目查会查不到，导致执行时 {{host_test}} 原样发出去、请求直接失败。
+    """
+    from django.db.models import F, Q
+    from .models import Environment
+
+    project = None
+    collection = getattr(api_request, 'collection', None)
+    if collection:
+        project = getattr(collection, 'project', None)
+
+    qs = Environment.objects.filter(scope='GLOBAL')
+    if project:
+        # 同时纳入「属于本项目」和「不绑定项目」的全局环境
+        qs = qs.filter(Q(project=project) | Q(project__isnull=True))
+    # 属于当前项目的排在前面，同名变量以它为准
+    qs = qs.order_by(F('project').desc(nulls_last=True))
+
+    variables = {}
+    for env in qs:
+        for key, value in normalize_env_variables(env).items():
+            variables.setdefault(key, value)
+    return variables
+
+
 def prepare_request_parts(api_request, environment, resolver=None):
     """按环境变量准备一次请求的 url / headers / params / body。
 
@@ -976,6 +1007,11 @@ def prepare_request_parts(api_request, environment, resolver=None):
     """
     resolver = resolver or VariableResolver()
     variables = normalize_env_variables(environment)
+
+    # 环境里没配的变量回落到全局环境，否则未指定环境执行套件时
+    # host_test 这类全局变量会被判为「未定义」而整条失败
+    for key, value in collect_global_variables(api_request).items():
+        variables.setdefault(key, value)
 
     missing = find_undefined_variables(
         api_request.url,

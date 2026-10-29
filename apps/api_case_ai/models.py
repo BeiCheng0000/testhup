@@ -60,6 +60,10 @@ class ApiCaseGenerationTask(models.Model):
     ai_config_snapshot = models.JSONField(default=dict, blank=True, verbose_name='AI配置快照')
     error_message = models.TextField(blank=True, null=True, verbose_name='错误信息')
 
+    # AI 审核并发锁：审核进行中不允许再次启动，结束后自动释放
+    ai_review_running = models.BooleanField(default=False, verbose_name='AI审核中')
+    ai_review_started_at = models.DateTimeField(null=True, blank=True, verbose_name='AI审核开始时间')
+
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                    related_name='api_case_ai_tasks', verbose_name='创建者')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')

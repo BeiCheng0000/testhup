@@ -97,6 +97,7 @@ class ApiRequestSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    ai_source_request_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ApiRequest
@@ -104,9 +105,13 @@ class ApiRequestSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'request_type', 'method', 'url',
             'headers', 'params', 'body', 'auth', 'pre_request_script',
             'post_request_script', 'assertions', 'collection', 'order', 'created_by',
+            'ai_generated', 'ai_source_request', 'ai_source_request_name',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'ai_generated', 'ai_source_request']
+
+    def get_ai_source_request_name(self, obj):
+        return obj.ai_source_request.name if obj.ai_source_request_id else ''
 
     def create(self, validated_data):
         validated_data['created_by'] = self.context['request'].user

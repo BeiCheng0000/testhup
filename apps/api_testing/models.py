@@ -101,6 +101,13 @@ class ApiRequest(models.Model):
     post_request_script = models.TextField(blank=True, verbose_name='请求后脚本')
     assertions = models.JSONField(default=default_status_assertions, verbose_name='断言规则')
     order = models.IntegerField(default=0, verbose_name='排序')
+
+    # AI 用例中心采纳后写入：标记这条接口来自 AI 用例，并记住它源自哪个已有接口
+    ai_generated = models.BooleanField(default=False, verbose_name='AI生成用例')
+    ai_source_request = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ai_derived_requests', verbose_name='AI用例来源接口')
+
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建者')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')

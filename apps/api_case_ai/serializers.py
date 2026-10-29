@@ -72,13 +72,13 @@ class ApiCaseGenerationTaskSerializer(serializers.ModelSerializer):
             'probe_enabled', 'probe_results', 'probe_summary',
             'source_requests', 'source_request_count', 'source_requests_detail',
             'status', 'status_display', 'progress', 'total_generated',
-            'ai_config_snapshot', 'error_message', 'created_by', 'created_by_name',
+            'ai_config_snapshot', 'ai_review_running', 'error_message', 'created_by', 'created_by_name',
             'created_at', 'updated_at', 'finished_at',
             'approved_count', 'adopted_count', 'draft_count',
         ]
         read_only_fields = ['status', 'progress', 'total_generated', 'ai_config_snapshot',
-                            'probe_results', 'error_message', 'created_by', 'created_at',
-                            'updated_at', 'finished_at']
+                            'probe_results', 'ai_review_running', 'error_message', 'created_by',
+                            'created_at', 'updated_at', 'finished_at']
         extra_kwargs = {
             'source_content': {'required': False, 'allow_blank': True},
         }

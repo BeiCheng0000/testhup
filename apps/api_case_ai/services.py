@@ -887,6 +887,12 @@ def run_ai_review(task_id, user_id, auto_fix=True, fix_values=False, approve_on_
         logger.exception('AI 审核接口用例失败')
         task.error_message = f'AI 审核失败：{str(exc)[:500]}'
         task.save(update_fields=['error_message', 'updated_at'])
+    finally:
+        # 释放并发锁，允许下一次审核；失败也不能影响主流程
+        try:
+            ApiCaseGenerationTask.objects.filter(pk=task_id).update(ai_review_running=False)
+        except Exception:
+            logger.exception('释放 AI 审核锁失败')
 
 
 def get_or_create_target_collection(task):
@@ -904,6 +910,15 @@ def get_or_create_target_collection(task):
     return collection
 
 
+def _adopt_description(draft):
+    """采纳后的描述：开头带上 AI 来源标记，在接口管理里一眼能看出出处。"""
+    origin = draft.source_request.name if draft.source_request_id else 'AI 生成用例'
+    tag = f'【AI 用例】源自接口：{origin}'
+    base = draft.description or draft.expected_result or ''
+    lines = [l for l in base.splitlines() if not l.startswith('【AI 用例】')]
+    return '\n'.join([tag] + lines).strip()
+
+
 def adopt_draft(draft, user, collection=None):
     """把草稿采纳为 ApiRequest（已存在则更新）。返回 ApiRequest。"""
     from apps.api_testing.models import ApiRequest
@@ -913,7 +928,7 @@ def adopt_draft(draft, user, collection=None):
     values = {
         'collection': collection,
         'name': draft.name,
-        'description': draft.description or draft.expected_result,
+        'description': _adopt_description(draft),
         'method': draft.method,
         'url': draft.url,
         'headers': draft.headers or {},
@@ -923,6 +938,9 @@ def adopt_draft(draft, user, collection=None):
         'pre_request_script': draft.pre_request_script or '',
         'post_request_script': draft.post_request_script or '',
         'assertions': draft.assertions or [],
+        # 关联性标记：入库的接口能追溯到「哪个已有接口」生成的
+        'ai_generated': True,
+        'ai_source_request': draft.source_request,
     }
 
     api_request = draft.adopted_request
@@ -938,13 +956,21 @@ def adopt_draft(draft, user, collection=None):
     return api_request
 
 
-def adopt_task(task, user, suite_name=None):
-    """批量采纳任务中「审核通过」的草稿，并汇总到一个测试套件。返回 (suite, adopted_count)。"""
+def adopt_task(task, user, suite_name=None, draft_ids=None):
+    """批量采纳任务中「审核通过」的草稿，并汇总到一个测试套件。返回 (suite, adopted_count)。
+
+    draft_ids 非空时只采纳这些勾选的草稿（仍需是「审核通过」状态）。
+    """
     from apps.api_testing.models import TestSuite, TestSuiteRequest
 
-    drafts = list(task.drafts.filter(status='approved').order_by('order', 'id'))
+    qs = task.drafts.filter(status='approved')
+    if draft_ids:
+        qs = qs.filter(id__in=draft_ids)
+    drafts = list(qs.order_by('order', 'id'))
     if not drafts:
-        raise ValueError('没有「审核通过」的用例可采纳')
+        # 勾选项都还没审核通过是常见操作顺序问题，不是异常：
+        # 返回 (None, 0) 让调用方给出引导提示，避免前端弹红色 400 错误
+        return None, 0
 
     collection = get_or_create_target_collection(task)
     suite_name = suite_name or f'{task.name}-自动化套件'
