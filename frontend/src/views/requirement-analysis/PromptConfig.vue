@@ -27,7 +27,7 @@
                 <h3>{{ config.name }}</h3>
                 <div class="config-badges">
                   <span class="type-badge" :class="config.prompt_type">
-                    {{ config.prompt_type === 'writer' ? $t('promptConfig.writerPrompt') : $t('promptConfig.reviewerPrompt') }}
+                    {{ getPromptTypeLabel(config.prompt_type) }}
                   </span>
                   <span class="status-badge" :class="{ active: config.is_active }">
                     {{ config.is_active ? $t('promptConfig.enabled') : $t('promptConfig.disabled') }}
@@ -107,6 +107,8 @@
                 <option value="">{{ $t('promptConfig.selectPromptType') }}</option>
                 <option value="writer">{{ $t('promptConfig.writerPrompt') }}</option>
                 <option value="reviewer">{{ $t('promptConfig.reviewerPrompt') }}</option>
+                <option value="api_case_generate">{{ $t('promptConfig.apiCaseGeneratePrompt') }}</option>
+                <option value="api_case_review">{{ $t('promptConfig.apiCaseReviewPrompt') }}</option>
               </select>
             </div>
 
@@ -173,7 +175,7 @@
               <div class="meta-item">
                 <label>{{ $t('promptConfig.type') }}</label>
                 <span class="type-badge" :class="previewConfig.prompt_type">
-                  {{ previewConfig.prompt_type === 'writer' ? $t('promptConfig.writerPrompt') : $t('promptConfig.reviewerPrompt') }}
+                  {{ getPromptTypeLabel(previewConfig.prompt_type) }}
                 </span>
               </div>
               <div class="meta-item">
@@ -203,16 +205,12 @@
           <div class="defaults-content">
             <div class="tabs">
               <button
+                v-for="t in Object.keys(defaultPrompts)"
+                :key="t"
                 class="tab-btn"
-                :class="{ active: activeTab === 'writer' }"
-                @click="activeTab = 'writer'">
-                {{ $t('promptConfig.writerTab') }}
-              </button>
-              <button
-                class="tab-btn"
-                :class="{ active: activeTab === 'reviewer' }"
-                @click="activeTab = 'reviewer'">
-                {{ $t('promptConfig.reviewerTab') }}
+                :class="{ active: activeTab === t }"
+                @click="activeTab = t">
+                {{ getPromptTypeLabel(t) }}
               </button>
             </div>
 
@@ -259,7 +257,9 @@ export default {
       previewConfig: {},
       defaultPrompts: {
         writer: '',
-        reviewer: ''
+        reviewer: '',
+        api_case_generate: '',
+        api_case_review: ''
       },
       activeTab: 'writer',
       configForm: {
@@ -277,7 +277,13 @@ export default {
 
   methods: {
     getPromptTypeLabel(promptType) {
-      return promptType === 'writer' ? this.$t('promptConfig.writerPrompt') : this.$t('promptConfig.reviewerPrompt')
+      const map = {
+        writer: this.$t('promptConfig.writerPrompt'),
+        reviewer: this.$t('promptConfig.reviewerPrompt'),
+        api_case_generate: this.$t('promptConfig.apiCaseGeneratePrompt'),
+        api_case_review: this.$t('promptConfig.apiCaseReviewPrompt'),
+      }
+      return map[promptType] || promptType
     },
 
     getExistingPromptConfig(promptType, excludeId = null) {
@@ -285,7 +291,8 @@ export default {
     },
 
     getMissingPromptTypes() {
-      return ['writer', 'reviewer'].filter(type => !this.getExistingPromptConfig(type))
+      return ['writer', 'reviewer', 'api_case_generate', 'api_case_review']
+        .filter(type => !this.getExistingPromptConfig(type))
     },
 
     formatApiError(error, fallbackText) {
@@ -360,7 +367,7 @@ export default {
       const missingTypes = this.getMissingPromptTypes()
 
       if (missingTypes.length === 0) {
-        const existingTypes = ['writer', 'reviewer'].map(type => this.getPromptTypeLabel(type))
+        const existingTypes = ['writer', 'reviewer', 'api_case_generate', 'api_case_review'].map(type => this.getPromptTypeLabel(type))
         ElMessage.warning(this.$t('promptConfig.promptExists', { types: existingTypes.join('、') }))
         return
       }
@@ -369,6 +376,7 @@ export default {
         const response = await api.get('/requirement-analysis/prompts/load_defaults/')
         console.log('Default prompts response:', response.data)
         this.defaultPrompts = response.data.defaults
+        this.activeTab = Object.keys(response.data.defaults)[0] || 'writer'
         this.showDefaultsModal = true
         console.log('showDefaultsModal set to:', this.showDefaultsModal)
       } catch (error) {
@@ -384,7 +392,7 @@ export default {
         const missingTypes = this.getMissingPromptTypes()
 
         if (missingTypes.length === 0) {
-          const existingTypes = ['writer', 'reviewer'].map(type => this.getPromptTypeLabel(type))
+          const existingTypes = ['writer', 'reviewer', 'api_case_generate', 'api_case_review'].map(type => this.getPromptTypeLabel(type))
           ElMessage.warning(this.$t('promptConfig.promptExists', { types: existingTypes.join('、') }))
           return
         }
@@ -405,6 +413,26 @@ export default {
             name: this.$t('promptConfig.defaultReviewerName'),
             prompt_type: 'reviewer',
             content: this.defaultPrompts.reviewer,
+            is_active: true
+          })
+        }
+
+        // 创建接口用例生成提示词配置
+        if (missingTypes.includes('api_case_generate') && this.defaultPrompts.api_case_generate) {
+          await api.post('/requirement-analysis/prompts/', {
+            name: this.$t('promptConfig.defaultApiCaseGenerateName'),
+            prompt_type: 'api_case_generate',
+            content: this.defaultPrompts.api_case_generate,
+            is_active: true
+          })
+        }
+
+        // 创建接口用例评审提示词配置
+        if (missingTypes.includes('api_case_review') && this.defaultPrompts.api_case_review) {
+          await api.post('/requirement-analysis/prompts/', {
+            name: this.$t('promptConfig.defaultApiCaseReviewName'),
+            prompt_type: 'api_case_review',
+            content: this.defaultPrompts.api_case_review,
             is_active: true
           })
         }
@@ -663,6 +691,16 @@ export default {
 .type-badge.reviewer {
   background: #fff3e0;
   color: #f57c00;
+}
+
+.type-badge.api_case_generate {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.type-badge.api_case_review {
+  background: #f3e5f5;
+  color: #7b1fa2;
 }
 
 .status-badge {

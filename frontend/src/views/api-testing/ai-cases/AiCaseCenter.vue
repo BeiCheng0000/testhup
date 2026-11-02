@@ -99,21 +99,10 @@
       <el-table-column :label="$t('apiTesting.aiCases.createdAt')" min-width="170">
         <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column :label="$t('apiTesting.aiCases.operation')" width="300" fixed="right">
+      <el-table-column :label="$t('apiTesting.aiCases.operation')" width="260" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="openDrafts(row)">
             {{ $t('apiTesting.aiCases.viewDrafts') }}
-          </el-button>
-          <el-button
-            type="success"
-            link
-            size="small"
-            :disabled="row.ai_review_running"
-            @click="aiReview(row)"
-          >
-            {{ row.ai_review_running
-              ? $t('apiTesting.aiCases.aiReviewing')
-              : $t('apiTesting.aiCases.aiReview') }}
           </el-button>
           <el-button
             type="warning"
@@ -218,6 +207,22 @@
         <el-button size="small" @click="loadDrafts">
           <el-icon><Refresh /></el-icon>
         </el-button>
+        <el-button
+          type="warning"
+          size="small"
+          :disabled="currentTask?.ai_review_running"
+          @click="selfCheck(currentTask)"
+        >
+          {{ currentTask?.ai_review_running ? $t('apiTesting.aiCases.running') : $t('apiTesting.aiCases.selfCheck') }}
+        </el-button>
+        <el-button
+          type="success"
+          size="small"
+          :disabled="currentTask?.ai_review_running"
+          @click="aiReview(currentTask)"
+        >
+          {{ currentTask?.ai_review_running ? $t('apiTesting.aiCases.aiReviewing') : $t('apiTesting.aiCases.aiReview') }}
+        </el-button>
       </div>
 
       <!-- 批量操作条：勾选后才可用 -->
@@ -281,19 +286,30 @@
                 </span>
               </p>
               <div
-                v-if="row.self_check_result && row.self_check_result.fixes && row.self_check_result.fixes.length"
-                class="fix-list"
-              >
-                <div class="fix-list-title">{{ $t('apiTesting.aiCases.autoFixes') }}</div>
-                <div v-for="(f, i) in row.self_check_result.fixes" :key="i" class="fix-item">- {{ f }}</div>
-              </div>
-              <div
                 v-if="row.self_check_result && row.self_check_result.unresolved && row.self_check_result.unresolved.length"
                 class="fix-list"
               >
                 <div class="fix-list-title">{{ $t('apiTesting.aiCases.pendingConfirm') }}</div>
                 <div v-for="(f, i) in row.self_check_result.unresolved" :key="i" class="fix-item">- {{ f }}</div>
               </div>
+
+              <div v-if="row.latest_ai_review" class="ai-review-block">
+                <div class="ai-review-title">
+                  <strong>{{ $t('apiTesting.aiCases.aiReviewOpinion') }}：</strong>
+                  <el-tag size="small" :type="reviewSuggestionType(row.latest_ai_review.suggestion)">
+                    {{ reviewSuggestionLabel(row.latest_ai_review.suggestion) }}
+                  </el-tag>
+                </div>
+                <div class="ai-review-comment">{{ row.latest_ai_review.comment }}</div>
+                <el-button
+                  v-if="row.latest_ai_review.suggestion && row.latest_ai_review.suggestion !== 'approve'"
+                  type="warning"
+                  size="small"
+                  :disabled="currentTask?.ai_review_running"
+                  @click="aiReviseDraft(row)"
+                >{{ $t('apiTesting.aiCases.aiRevise') }}</el-button>
+              </div>
+
               <p><strong>{{ $t('apiTesting.aiCases.comment') }}：</strong>{{ row.review_comment || '-' }}</p>
               <pre class="draft-json">{{ prettyJson(row) }}</pre>
             </div>
@@ -361,10 +377,6 @@
               <el-tag size="small" :type="selfCheckType(row.self_check_result.verdict)">
                 {{ selfCheckLabel(row.self_check_result.verdict) }}
               </el-tag>
-              <span
-                v-if="row.self_check_result.fixes && row.self_check_result.fixes.length"
-                class="fix-count"
-              >{{ row.self_check_result.fixes.length }}{{ $t('apiTesting.aiCases.fixCount') }}</span>
             </template>
             <span v-else>-</span>
           </template>
@@ -415,6 +427,7 @@
                   <el-dropdown-item command="reviews">
                     {{ $t('apiTesting.aiCases.reviews') }}
                   </el-dropdown-item>
+
                   <el-dropdown-item command="delete" divided>
                     <span class="danger-text">{{ $t('apiTesting.aiCases.deleteCase') }}</span>
                   </el-dropdown-item>
@@ -1559,11 +1572,7 @@ const aiReview = async (task) => {
   }
   task.ai_review_running = true // 乐观置位，等轮询回来再用服务端状态校正
   try {
-    await axios.post(`${BASE}ai-case-tasks/${task.id}/ai-review/`, {
-      auto_fix: true,
-      fix_values: false,
-      approve_on_pass: false
-    })
+    await axios.post(`${BASE}ai-case-tasks/${task.id}/ai-review/`, {})
     ElMessage.success(t('apiTesting.aiCases.aiReviewStarted'))
     startPolling()
   } catch (e) {
@@ -1576,6 +1585,57 @@ const aiReview = async (task) => {
     await loadTasks() // 用服务端真实状态校正按钮
   }
 }
+
+const selfCheck = async (task) => {
+  if (!task || task.ai_review_running) {
+    ElMessage.warning(t('apiTesting.aiCases.aiReviewRunning'))
+    return
+  }
+  task.ai_review_running = true
+  try {
+    await axios.post(`${BASE}ai-case-tasks/${task.id}/self-check/`, {})
+    ElMessage.success(t('apiTesting.aiCases.selfCheckStarted'))
+    startPolling()
+  } catch (e) {
+    if (e?.response?.status === 409) {
+      ElMessage.warning(t('apiTesting.aiCases.aiReviewRunning'))
+    } else {
+      ElMessage.error('启动一键试跑失败')
+    }
+  } finally {
+    await loadTasks()
+  }
+}
+
+const aiReviseDraft = async (row) => {
+  if (!currentTask.value) return
+  try {
+    await axios.post(`${BASE}ai-case-tasks/${currentTask.value.id}/ai-revise/`, {
+      draft_ids: [row.id],
+    })
+    ElMessage.success(t('apiTesting.aiCases.aiReviseStarted'))
+    startPolling()
+  } catch (e) {
+    if (e?.response?.status === 409) {
+      ElMessage.warning(t('apiTesting.aiCases.aiReviewRunning'))
+    } else {
+      ElMessage.error('启动 AI 修订失败')
+    }
+  } finally {
+    await loadDrafts()
+    await loadTasks()
+  }
+}
+
+const reviewSuggestionLabel = (s) => ({
+  approve: t('apiTesting.aiCases.reasonOK'),
+  reject: t('apiTesting.aiCases.reject'),
+  needs_revision: t('apiTesting.aiCases.needsRevision'),
+}[s] || s || '-')
+
+const reviewSuggestionType = (s) => ({
+  approve: 'success', reject: 'danger', needs_revision: 'warning',
+}[s] || 'info')
 
 const regenerate = async (task) => {
   try {
@@ -1789,6 +1849,8 @@ const onDraftCommand = (cmd, row) => {
   if (cmd === 'duplicate') duplicateDraft(row)
   else if (cmd === 'delete') removeDraft(row)
   else if (cmd === 'reviews') showReviews(row)
+  else if (cmd === 'ai_revise') aiReviseDraft(row)
+
   else reviewDraft(row, cmd)
 }
 

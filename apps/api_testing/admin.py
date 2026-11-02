@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    ApiProject, ApiCollection, ApiRequest, Environment, RequestHistory,
+    ApiProject, ApiCollection, ApiRequest, Environment, GlobalVariable, RequestHistory,
     TestSuite, TestExecution, ScheduledTask, TaskExecutionLog, AIServiceConfig
 )
 
@@ -32,6 +32,13 @@ class EnvironmentAdmin(admin.ModelAdmin):
     list_display = ['name', 'scope', 'project', 'is_active', 'created_by', 'created_at']
     list_filter = ['scope', 'is_active', 'created_at']
     search_fields = ['name']
+
+
+@admin.register(GlobalVariable)
+class GlobalVariableAdmin(admin.ModelAdmin):
+    list_display = ['key', 'value', 'project', 'description', 'created_by', 'updated_at']
+    list_filter = ['project', 'created_at']
+    search_fields = ['key', 'description']
 
 
 @admin.register(RequestHistory)

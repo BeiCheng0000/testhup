@@ -151,6 +151,32 @@ class Environment(models.Model):
         return f"{self.name} ({self.get_scope_display()})"
 
 
+class GlobalVariable(models.Model):
+    """全局变量（独立于环境，纯变量列表；project 为空表示跨项目全局变量）"""
+    key = models.CharField(max_length=200, verbose_name='变量名')
+    value = models.TextField(blank=True, default='', verbose_name='变量值')
+    initial_value = models.TextField(blank=True, default='', verbose_name='初始值')
+    description = models.CharField(max_length=500, blank=True, default='', verbose_name='描述')
+    project = models.ForeignKey(ApiProject, on_delete=models.CASCADE, null=True, blank=True,
+                                related_name='global_variables', verbose_name='适用项目')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建者')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'api_global_variables'
+        verbose_name = '全局变量'
+        verbose_name_plural = '全局变量'
+        ordering = ['key', 'id']
+        indexes = [
+            models.Index(fields=['key'], name='idx_global_var_key'),
+            models.Index(fields=['project'], name='idx_global_var_project'),
+        ]
+
+    def __str__(self):
+        return self.key
+
+
 class RequestHistory(models.Model):
     """请求历史模型"""
     request = models.ForeignKey(ApiRequest, on_delete=models.CASCADE, related_name='histories', verbose_name='关联请求')

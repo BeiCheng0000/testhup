@@ -26,7 +26,7 @@ import subprocess
 from datetime import datetime, timedelta
 
 from .models import (
-    ApiProject, ApiCollection, ApiRequest, Environment,
+    ApiProject, ApiCollection, ApiRequest, Environment, GlobalVariable,
     RequestHistory, TestSuite, TestExecution, TestSuiteRequest,
     ScheduledTask, TaskExecutionLog, NotificationLog,
     TaskNotificationSetting, OperationLog, AIServiceConfig,
@@ -34,7 +34,8 @@ from .models import (
 
 from .serializers import (
     ApiProjectSerializer, ApiCollectionSerializer, ApiRequestSerializer,
-    EnvironmentSerializer, RequestHistorySerializer, RequestHistoryListSerializer,
+    EnvironmentSerializer, GlobalVariableSerializer,
+    RequestHistorySerializer, RequestHistoryListSerializer,
     TestSuiteSerializer, TestSuiteRequestSerializer, TestExecutionSerializer,
     UserSerializer, ScheduledTaskSerializer, TaskExecutionLogSerializer,
     NotificationLogSerializer, TaskNotificationSettingSerializer,
@@ -496,7 +497,8 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
             if environment_id:
                 # 用 filter().first()：环境被删时给出空变量而不是 500
                 env = Environment.objects.filter(id=environment_id).first()
-                if env:
+                # 全局变量已独立为 GlobalVariable，旧的 GLOBAL 环境不再当局部变量合并
+                if env and env.scope != 'GLOBAL':
                     variables.update(normalize_env_variables(env))
             
             # 使用前端发送的更新后的数据，如果没有则使用数据库中的数据
@@ -753,14 +755,13 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
+        # 全局变量已独立为 GlobalVariable，环境接口只返回局部(LOCAL)环境；
+        # 历史上的 GLOBAL 环境记录保留在库中用于回退，但不再通过接口暴露。
         user = self.request.user
         return Environment.objects.filter(
-            models.Q(scope='GLOBAL') | 
-            models.Q(
-                scope='LOCAL',
-                project__in=ApiProject.objects.filter(
-                    models.Q(owner=user) | models.Q(members=user)
-                )
+            scope='LOCAL',
+            project__in=ApiProject.objects.filter(
+                models.Q(owner=user) | models.Q(members=user)
             )
         ).distinct().order_by('-created_at')
     
@@ -811,6 +812,50 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
             resource_type='environment',
             resource_id=instance.id,
             resource_name=instance.name,
+            user=self.request.user
+        )
+        instance.delete()
+
+
+class GlobalVariableViewSet(viewsets.ModelViewSet):
+    """全局变量（独立于环境）：列表 / 新增 / 编辑 / 删除"""
+    queryset = GlobalVariable.objects.all()
+    serializer_class = GlobalVariableSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['project']
+    search_fields = ['key', 'description']
+    ordering = ['key', 'id']
+
+    def get_queryset(self):
+        user = self.request.user
+        return GlobalVariable.objects.filter(
+            models.Q(project__isnull=True) |
+            models.Q(project__in=ApiProject.objects.filter(
+                models.Q(owner=user) | models.Q(members=user)
+            ))
+        ).distinct().order_by('key', 'id')
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        log_operation(
+            operation_type='create', resource_type='global_variable',
+            resource_id=instance.id, resource_name=instance.key,
+            user=self.request.user
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        log_operation(
+            operation_type='edit', resource_type='global_variable',
+            resource_id=instance.id, resource_name=instance.key,
+            user=self.request.user
+        )
+
+    def perform_destroy(self, instance):
+        log_operation(
+            operation_type='delete', resource_type='global_variable',
+            resource_id=instance.id, resource_name=instance.key,
             user=self.request.user
         )
         instance.delete()
@@ -2286,12 +2331,16 @@ class ScheduledTaskViewSet(viewsets.ModelViewSet):
         """执行API请求"""
         from .utils import execute_api_request
         
-        # 如果定时任务未指定环境，回退到接口所在项目的激活环境
+        # 如果定时任务未指定环境，回退到接口所在项目的激活「局部」环境
         from .models import Environment
         environment = task.environment
+        # 全局变量已独立为 GlobalVariable，旧的 GLOBAL 环境不再作为执行环境
+        if environment is not None and environment.scope == 'GLOBAL':
+            environment = None
         if not environment:
             environment = Environment.objects.filter(
-                project=task.api_request.project, 
+                project=task.api_request.project,
+                scope='LOCAL',
                 is_active=True
             ).first()
         

@@ -353,6 +353,8 @@ export default {
     selectPromptType: '请选择提示词类型',
     writerPrompt: '测试用例编写提示词',
     reviewerPrompt: '测试用例评审提示词',
+    apiCaseGeneratePrompt: '接口用例生成提示词',
+    apiCaseReviewPrompt: '接口用例评审提示词',
     isActive: '是否启用',
     promptContent: '提示词内容',
     contentPlaceholder: '请输入提示词内容，支持使用变量占位符...',
@@ -388,6 +390,8 @@ export default {
     confirmLoad: '确认加载',
     defaultWriterName: '默认测试用例编写提示词',
     defaultReviewerName: '默认测试用例评审提示词',
+    defaultApiCaseGenerateName: '默认接口用例生成提示词',
+    defaultApiCaseReviewName: '默认接口用例评审提示词',
     defaultsLoadSuccess: '默认提示词加载成功',
 
     // Empty State

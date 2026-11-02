@@ -4,7 +4,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from .views import (
     ApiProjectViewSet, ApiCollectionViewSet, ApiRequestViewSet,
-    EnvironmentViewSet, RequestHistoryViewSet, TestSuiteViewSet,
+    EnvironmentViewSet, GlobalVariableViewSet, RequestHistoryViewSet, TestSuiteViewSet,
     TestSuiteRequestViewSet, TestExecutionViewSet, UserViewSet,
     ScheduledTaskViewSet, TaskExecutionLogViewSet, NotificationLogViewSet,
     TaskNotificationSettingViewSet, OperationLogViewSet,
@@ -17,6 +17,7 @@ router.register(r'projects', ApiProjectViewSet)
 router.register(r'collections', ApiCollectionViewSet)
 router.register(r'requests', ApiRequestViewSet)
 router.register(r'environments', EnvironmentViewSet)
+router.register(r'global-variables', GlobalVariableViewSet, basename='globalvariable')
 router.register(r'histories', RequestHistoryViewSet)
 router.register(r'test-suites', TestSuiteViewSet)
 router.register(r'test-suite-requests', TestSuiteRequestViewSet)

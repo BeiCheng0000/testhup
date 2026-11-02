@@ -1,6 +1,7 @@
 <template>
   <div class="environment-table">
-    <el-table :data="data" v-loading="loading" style="width: 100%">
+    <div class="env-table-card">
+    <el-table :data="data" v-loading="loading" class="env-table" style="width: 100%">
       <el-table-column prop="name" :label="$t('apiTesting.component.environmentTable.environmentName')" min-width="200" />
       <el-table-column prop="scope" :label="$t('apiTesting.component.environmentTable.scope')" width="120">
         <template #default="scope">
@@ -70,6 +71,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <!-- 查看变量对话框 -->
     <el-dialog
@@ -100,7 +102,7 @@
 
         <div class="variables-table">
           <h4>{{ $t('apiTesting.component.environmentTable.variableList') }}</h4>
-          <el-table :data="formatVariables(viewingEnvironment.variables)" style="width: 100%">
+          <el-table :data="formatVariables(viewingEnvironment.variables)" class="env-table" style="width: 100%">
             <el-table-column prop="key" :label="$t('apiTesting.component.environmentTable.variableName')" width="150" />
             <el-table-column prop="initialValue" :label="$t('apiTesting.component.environmentTable.initialValue')" />
             <el-table-column prop="currentValue" :label="$t('apiTesting.component.environmentTable.currentValue')" />
@@ -178,6 +180,30 @@ const viewVariables = (environment) => {
   height: 100%;
 }
 
+.env-table-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 6px 18px rgba(31, 45, 80, 0.06);
+  border: 1px solid #eef1f8;
+}
+
+.env-table {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.env-table :deep(.el-table__header-wrapper th) {
+  background: linear-gradient(90deg, #f3f7ff, #f7f3ff);
+  color: #2b3552;
+  font-weight: 600;
+}
+.env-table :deep(.el-table__row) {
+  transition: background 0.15s ease;
+}
+.env-table :deep(.el-table__row:hover > td) {
+  background: #f5f9ff !important;
+}
+
 .variables-view {
   max-height: 70vh;
   overflow-y: auto;
@@ -189,7 +215,7 @@ const viewVariables = (environment) => {
 
 .variables-table h4 {
   margin: 20px 0 10px 0;
-  color: #303133;
+  color: #2b3552;
   font-size: 14px;
   font-weight: 600;
 }

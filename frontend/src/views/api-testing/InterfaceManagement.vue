@@ -288,6 +288,13 @@
                       <el-option :label="$t('apiTesting.interface.rawXml')" value="xml" />
                     </el-select>
 
+                    <el-tag
+                      v-if="bodyKindHint"
+                      size="small"
+                      type="info"
+                      style="margin-left: 8px;"
+                    >{{ bodyKindHint }}</el-tag>
+
                     <el-button
                       size="small"
                       :icon="MagicStick"
@@ -1353,6 +1360,7 @@ const selectedProject = ref(null)
 const collections = ref([])
 const flatCollections = ref([])
 const environments = ref([])
+const globalVariables = ref([])
 const selectedEnvironment = ref(null)
 
 // —— 前端缓存：环境与项目的默认选择（localStorage）——
@@ -1472,6 +1480,23 @@ const rawType = ref('json')
 const formData = ref([])
 const formUrlEncoded = ref([])
 const rawBody = ref('')
+
+// 「原始文本」是一个容器：语言选 JSON 时，保存会 JSON.parse 后存成 type='json'
+// 并按 application/json 发送；否则存 type='raw' 按纯文本发送。
+// 单选按钮只显示「原始文本」，看不出实际发送格式，排查时容易误判，这里实时提示。
+const bodyKindHint = computed(() => {
+  if (bodyType.value !== 'raw' || !rawBody.value.trim()) return ''
+  // 无论按 JSON 还是纯文本发送，{{变量}} 与 ${函数} 都会照常解析，
+  // 这里一并说明，避免误以为「按纯文本发送就不会做替换」
+  const suffix = '· {{变量}} 与 ${函数} 仍会解析'
+  if (rawType.value !== 'json') return `按纯文本发送 ${suffix}`
+  try {
+    JSON.parse(rawBody.value)
+    return `按 JSON 发送（application/json）${suffix}`
+  } catch (e) {
+    return `内容非合法 JSON，按纯文本发送 ${suffix}`
+  }
+})
 
 const availableMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'CONNECT', 'TRACE']
 
@@ -1606,6 +1631,19 @@ const loadEnvironments = async (projectId) => {
   } catch (error) {
     ElMessage.error('加载环境失败')
     console.error('加载环境失败:', error)
+  } finally {
+    // 全局变量独立于环境：无论是否选择环境都加载，供 {{变量}} 提示与 pm.globals 使用
+    await loadGlobalVariables()
+  }
+}
+
+const loadGlobalVariables = async () => {
+  try {
+    const res = await api.get('/api-testing/global-variables/')
+    globalVariables.value = res.data.results || res.data || []
+  } catch (e) {
+    globalVariables.value = []
+    console.error('加载全局变量失败:', e)
   }
 }
 
@@ -2622,9 +2660,58 @@ const runPostRequestScript = async (responseData) => {
     }
   }
 
+  // 全局变量：独立于环境，读写都走 /api-testing/global-variables/，未选环境也可用
+  const buildGlobalsApi = () => {
+    const findVar = (name) => globalVariables.value.find(v => v.key === name)
+    const persistSet = (name, value) => {
+      const existing = findVar(name)
+      if (existing) {
+        return api.patch(`/api-testing/global-variables/${existing.id}/`, { value })
+          .then(res => { existing.value = value; return res })
+      }
+      return api.post('/api-testing/global-variables/', {
+        key: name,
+        value,
+        project: selectedProject.value || null
+      }).then(res => { globalVariables.value.push(res.data); return res })
+    }
+    const persistUnset = (name) => {
+      const existing = findVar(name)
+      if (!existing) return Promise.resolve()
+      return api.delete(`/api-testing/global-variables/${existing.id}/`)
+        .then(() => { globalVariables.value = globalVariables.value.filter(v => v.key !== name) })
+    }
+    const readValue = (name) => {
+      const v = findVar(name)
+      return v ? (v.value ?? '') : ''
+    }
+    return {
+      get name() { return '全局变量' },
+      get variables() {
+        const obj = {}
+        globalVariables.value.forEach(v => { obj[v.key] = v.value ?? '' })
+        return obj
+      },
+      get: readValue,
+      set: (name, value) => {
+        const v = String(value)
+        savedEnvVariables.value.push({ env: '全局变量', name, value: v })
+        pendingEnvWrites.push(persistSet(name, v))
+      },
+      has: (name) => !!findVar(name),
+      unset: (name) => {
+        pendingEnvWrites.push(persistUnset(name))
+      },
+      toObject: () => {
+        const obj = {}
+        globalVariables.value.forEach(v => { obj[v.key] = v.value ?? '' })
+        return obj
+      }
+    }
+  }
+
   const currentEnvApi = buildEnvApi(getEnvById(selectedEnvironment.value))
-  const globalEnv = environments.value.find(e => e.scope === 'GLOBAL')
-  const globalsApi = buildEnvApi(globalEnv) || currentEnvApi
+  const globalsApi = buildGlobalsApi()
 
   const respData = responseData?.response_data || {}
   const pm = {

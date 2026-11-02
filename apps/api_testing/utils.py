@@ -173,16 +173,18 @@ def run_post_request_script(api_request, response, response_time, environment):
     project = getattr(environment, 'project', None) if environment else None
     if not project and getattr(api_request, 'collection', None):
         project = getattr(api_request.collection, 'project', None)
-    global_env = None
-    if project:
-        global_env = Environment.objects.filter(project=project, scope='GLOBAL').first()
-    if global_env and (not environment or global_env.id != environment.id):
+    global_vars = global_variables_for_project(project)
+    if global_vars:
         environments.append({
-            'id': global_env.id,
-            'name': global_env.name,
-            'scope': global_env.scope,
+            'id': 'global-variables',
+            'name': '全局变量',
+            'scope': 'GLOBAL',
             'current': False,
-            'variables': global_env.variables,
+            'is_global_variables': True,
+            'variables': {
+                k: {'initialValue': v, 'currentValue': v}
+                for k, v in global_vars.items()
+            },
         })
 
     result = run_tests_script(script, response_info, environments)
@@ -192,6 +194,9 @@ def run_post_request_script(api_request, response, response_time, environment):
     # 持久化环境变量变更，并同步更新内存中的 environment 对象以支持请求间变量串联
     for upd in result.get('updatedEnvironments', []) or []:
         try:
+            if upd.get('is_global_variables') or upd.get('id') == 'global-variables':
+                _persist_global_variables(project, upd.get('variables') or {}, api_request)
+                continue
             env_obj = Environment.objects.get(id=upd.get('id'))
             env_obj.variables = upd.get('variables')
             env_obj.save(update_fields=['variables'])
@@ -976,27 +981,71 @@ def _build_body(api_request, variables, resolver=None):
     return body_type, body_data, files
 
 
-def global_variables_for_project(project):
-    """取某项目可用的全局环境变量（scope=GLOBAL），项目级优先、跨项目兜底。
+def _global_variable_value(gv):
+    """取全局变量的有效值：变量值优先，其次初始值。"""
+    if gv.value not in (None, ''):
+        return gv.value
+    return gv.initial_value or ''
 
-    host_test 这类域名变量通常配在不绑定项目(project=None)的全局环境里，
+
+def global_variables_for_project(project):
+    """取某项目可用的全局变量（GlobalVariable 表），项目级优先、跨项目兜底。
+
+    host_test 这类域名变量通常配在「适用项目为空」的全局变量里，
     只按当前项目查会查不到，导致执行时 {{host_test}} 原样发出去、请求直接失败。
     """
     from django.db.models import F, Q
-    from .models import Environment
+    from .models import GlobalVariable
 
-    qs = Environment.objects.filter(scope='GLOBAL')
     if project:
-        # 同时纳入「属于本项目」和「不绑定项目」的全局环境
-        qs = qs.filter(Q(project=project) | Q(project__isnull=True))
+        # 同时纳入「属于本项目」和「不绑定项目」的全局变量
+        qs = GlobalVariable.objects.filter(Q(project=project) | Q(project__isnull=True))
+    else:
+        # 无项目上下文时只取跨项目全局变量，避免误用某个项目的专属变量
+        qs = GlobalVariable.objects.filter(project__isnull=True)
     # 属于当前项目的排在前面，同名变量以它为准
-    qs = qs.order_by(F('project').desc(nulls_last=True))
+    qs = qs.order_by(F('project').desc(nulls_last=True), 'id')
 
     variables = {}
-    for env in qs:
-        for key, value in normalize_env_variables(env).items():
-            variables.setdefault(key, value)
+    for gv in qs:
+        variables.setdefault(gv.key, _global_variable_value(gv))
+
+    # 展开变量互引（如 host_dongtai = {{host_zs}}），与原环境变量解析行为一致
+    for _ in range(5):
+        changed = False
+        for key, value in list(variables.items()):
+            if not isinstance(value, str):
+                continue
+            new_value = _replace_variables(value, variables)
+            if new_value != value:
+                variables[key] = new_value
+                changed = True
+        if not changed:
+            break
     return variables
+
+
+def _persist_global_variables(project, variables, api_request=None):
+    """把 Tests 脚本里 pm.globals.set 写入的变量持久化到 GlobalVariable 表。"""
+    from .models import GlobalVariable
+
+    user = getattr(api_request, 'created_by', None)
+    for key, value in (variables or {}).items():
+        if not key:
+            continue
+        val = value.get('currentValue') if isinstance(value, dict) else value
+        if val is None:
+            val = ''
+        val = str(val)
+        obj = GlobalVariable.objects.filter(key=key, project=project).first()
+        if obj:
+            obj.value = val
+            obj.save(update_fields=['value', 'updated_at'])
+        elif user:
+            GlobalVariable.objects.create(
+                key=key, project=project, value=val, initial_value=val,
+                created_by=user,
+            )
 
 
 def collect_global_variables(api_request):
@@ -1016,6 +1065,9 @@ def prepare_request_parts(api_request, environment, resolver=None):
       missing —— 环境中缺失的变量名列表，非空时调用方应中断执行并提示用户
     """
     resolver = resolver or VariableResolver()
+    # 旧 GLOBAL 环境不再作为局部变量合并（全局变量走 GlobalVariable）
+    if environment is not None and getattr(environment, 'scope', '') == 'GLOBAL':
+        environment = None
     variables = normalize_env_variables(environment)
 
     # 环境里没配的变量回落到全局环境，否则未指定环境执行套件时

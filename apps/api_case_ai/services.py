@@ -805,12 +805,16 @@ def run_generation(task_id, user_id):
     try:
         _set_task_progress(task, status='running', progress=5, error_message=None)
 
-        # 环境：优先任务指定，否则回退到项目下激活的环境，用于渲染 URL 与鉴权变量
+        # 环境：优先任务指定，否则回退到项目下激活的「局部」环境，用于渲染 URL 与鉴权变量
+        # 全局变量已独立为 GlobalVariable，旧的 GLOBAL 环境不再作为生成环境
         environment = task.environment
+        if environment is not None and environment.scope == 'GLOBAL':
+            environment = None
         if environment is None and task.project_id:
             from apps.api_testing.models import Environment
             environment = Environment.objects.filter(
-                project_id=task.project_id, is_active=True).order_by('id').first()
+                project_id=task.project_id, scope='LOCAL', is_active=True
+            ).order_by('id').first()
             if environment:
                 task.environment = environment
                 task.save(update_fields=['environment'])
@@ -921,10 +925,13 @@ def run_self_check(task, user, auto_fix=True, fix_values=False, approve_on_pass=
     from .models import ApiCaseDraft, ApiCaseDraftReview
 
     environment = task.environment
+    if environment is not None and environment.scope == 'GLOBAL':
+        environment = None
     if environment is None and task.project_id:
         from apps.api_testing.models import Environment
         environment = Environment.objects.filter(
-            project_id=task.project_id, is_active=True).order_by('id').first()
+            project_id=task.project_id, scope='LOCAL', is_active=True
+        ).order_by('id').first()
 
     drafts = list(ApiCaseDraft.objects.filter(task=task)
                   .exclude(status='adopted').order_by('order', 'id'))

@@ -13,7 +13,7 @@ class NullableDateField(serializers.DateField):
         # 否则使用父类的正常处理
         return super().to_internal_value(value)
 from .models import (
-    ApiProject, ApiCollection, ApiRequest, Environment,
+    ApiProject, ApiCollection, ApiRequest, Environment, GlobalVariable,
     RequestHistory, TestSuite, TestExecution, TestSuiteRequest,
     ScheduledTask, TaskExecutionLog, NotificationLog,
     TaskNotificationSetting, OperationLog, AIServiceConfig,
@@ -166,6 +166,39 @@ class EnvironmentSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         return data
+
+    def create(self, validated_data):
+        validated_data['created_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class GlobalVariableSerializer(serializers.ModelSerializer):
+    created_by = UserSerializer(read_only=True)
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=ApiProject.objects.all(), required=False, allow_null=True
+    )
+    project_name = serializers.CharField(source='project.name', read_only=True)
+
+    class Meta:
+        model = GlobalVariable
+        fields = [
+            'id', 'key', 'value', 'initial_value', 'description',
+            'project', 'project_name', 'created_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'created_by', 'project_name']
+
+    def validate(self, attrs):
+        key = (attrs.get('key') or (self.instance.key if self.instance else '') or '').strip()
+        if not key:
+            raise serializers.ValidationError({'key': '变量名不能为空'})
+        attrs['key'] = key
+        project = attrs.get('project', self.instance.project if self.instance else None)
+        qs = GlobalVariable.objects.filter(key=key, project=project)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError({'key': '该变量名已存在'})
+        return attrs
 
     def create(self, validated_data):
         validated_data['created_by'] = self.context['request'].user
