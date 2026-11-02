@@ -34,13 +34,62 @@ GENERATION_SYSTEM_PROMPT = """你是一名资深接口测试专家，负责编�
 status_code 的 expected 必须是整数（如 200）。
 json_path 断言需额外提供 json_path 字段，如 "$.code"。
 body.type 只允许 json / form-data / raw / none。
+
+断言要面向真实响应校准：优先校验"结构 / 类型 / 关键字段存在性 / 状态码"这类稳定特征，
+避免写死与具体数据强绑定的固定值（如把某个动态 id、时间戳、本次返回的 token 当成 expected）；
+生成后会以真实试跑响应再次校验并校准断言，所以断言应描述"真实合理的响应长什么样"，而非臆测固定值。
 """
 
 REVIEW_SYSTEM_PROMPT = """你是一名接口测试用例评审专家。
 对给定的用例逐条评审，只输出严格合法的 JSON 数组，不要任何额外文字。
 每个元素：{"index": 用例序号(从0开始), "action": "approve|reject|needs_revision", "comment": "简短评审意见"}
-评审关注：URL/参数是否合理、是否覆盖正向+异常+边界、断言是否充分且可执行、是否缺少鉴权或必要请求头。
+
+【首要原则：真实响应优先 / 对齐原则】
+当用例已真实试跑并附带 actual_response（接口真实返回的响应体），且真实响应在业务上合理、
+与用例的测试目标一致（例如成功场景返回了成功的数据、关键字段基本齐全、没有错误码或异常结构）时——
+即使某些断言字面没命中真实响应，也应视为"用例的断言 / 预期值需要按真实响应校正"，
+而不是判定用例不通过。此时：
+  - 若仅断言字面不符、响应本身合理：建议 action=approve，并在 comment 中说明"建议把断言对齐到真实响应即可"；
+  - 或 action=needs_revision，但 comment 必须明确"仅微调断言 / 预期值去匹配真实响应，不要改动请求与场景"。
+切记：断言是验证接口行为的手段，不是目的。当真实响应合理且符合预期时，应让用例去描述真实响应，
+而不是要求真实响应去符合写死的断言。不要把"响应和设想不一致但业务合理"当成缺陷。
+
+【第一层：用例设计合理性】URL/参数/请求是否合理、是否覆盖正向+异常+边界、断言是否充分且可执行、
+是否缺少鉴权或必要请求头。注意：若断言只是"写得太死 / 预期值过时 / 字段名与真实响应不一致"导致没命中，
+这是用例侧可校正的问题，不应据此 reject 用例本身。
+
+【第二层：实际响应数据合理性】只有当真实响应本身确实错误时才判不通过：
+  - 真实返回了错误码（如 $.code 非成功值）、被包装成成功的失败、空数组 / 空对象、缺关键字段、
+    数据结构违反接口契约、业务字段前后矛盾、或状态码与业务语义明显不符；
+  - 重要：接口本身不是标准答案，actual_response 只是当前"现状"，你要基于接口契约、业务常识和
+    用例设计目标判断数据"应不应该长这样"；
+  - 但若响应只是"和最初设想的字面不完全一致、但业务上合理且符合测试目标"，那不是响应的问题，
+    而是用例断言需要校正——按上面的对齐原则处理，不要 reject。
 """
+
+
+def _generation_system_prompt():
+    """接口用例生成的系统提示词：优先用配置中心的 api_case_generate，否则用内置默认。"""
+    try:
+        from apps.requirement_analysis.models import PromptConfig
+        cfg = PromptConfig.get_active_config('api_case_generate')
+        if cfg and cfg.content and cfg.content.strip():
+            return cfg.content.strip()
+    except Exception:
+        pass
+    return GENERATION_SYSTEM_PROMPT
+
+
+def _review_system_prompt():
+    """接口用例评审的系统提示词：优先用配置中心的 api_case_review，否则用内置默认。"""
+    try:
+        from apps.requirement_analysis.models import PromptConfig
+        cfg = PromptConfig.get_active_config('api_case_review')
+        if cfg and cfg.content and cfg.content.strip():
+            return cfg.content.strip()
+    except Exception:
+        pass
+    return REVIEW_SYSTEM_PROMPT
 
 
 def resolve_ai_config():
@@ -787,7 +836,7 @@ def run_generation(task_id, user_id):
 
         # 多配置兜底：某个模型名不可用时自动切换下一个可用配置
         text, cfg = call_llm_with_fallback(
-            GENERATION_SYSTEM_PROMPT,
+            _generation_system_prompt(),
             build_generation_prompt(task, source_requests, probes),
             max_tokens=8192,
         )
@@ -841,6 +890,13 @@ def run_generation(task_id, user_id):
                 comment='AI 生成，等待审核', previous_status='', new_status='pending_review')
             created += 1
 
+        # 生成完成后自动试跑所有用例：记录断言能否跑通并缓存真实响应（不自动修断言）
+        if created:
+            try:
+                run_self_check(task, user, auto_fix=False)
+            except Exception as exc:
+                logger.warning('生成后自动试跑失败（不影响生成结果）：%s', exc)
+
         _set_task_progress(
             task,
             status='success' if created else 'partial',
@@ -856,9 +912,11 @@ def run_generation(task_id, user_id):
 
 
 def run_self_check(task, user, auto_fix=True, fix_values=False, approve_on_pass=False):
-    """对整个任务做自检：逐条试跑、按真实响应修正断言、写审核流水。
+    """对整个任务做试跑：逐条试跑、记录断言能否跑通、缓存真实响应。
 
-    返回汇总 {total, passed, fixed, needs_revision, error}。
+    不自动修断言（去除「试图跑通」），也不改变用例审核状态，只把结果写到
+    self_check_result 与 action='self_check' 的流水（与 AI 审核意见区分开）。
+    返回汇总 {total, passed, needs_revision, error}。
     """
     from .models import ApiCaseDraft, ApiCaseDraftReview
 
@@ -870,48 +928,35 @@ def run_self_check(task, user, auto_fix=True, fix_values=False, approve_on_pass=
 
     drafts = list(ApiCaseDraft.objects.filter(task=task)
                   .exclude(status='adopted').order_by('order', 'id'))
-    summary = {'total': len(drafts), 'passed': 0, 'fixed': 0,
+    summary = {'total': len(drafts), 'passed': 0,
                'needs_revision': 0, 'error': 0}
     if not drafts:
         return summary
 
     for draft in drafts:
         previous_status = draft.status
-        checked, _ = self_check_draft(draft, user, environment, auto_fix, fix_values)
+        checked, _ = self_check_draft(draft, user, environment, auto_fix=False, fix_values=False)
         verdict = checked['verdict']
         status_code = checked.get('status_code')
 
         if verdict == 'passed':
             summary['passed'] += 1
-            comment = f'AI自检：试跑通过（状态码 {status_code}），断言全部命中真实响应'
-            new_status = 'approved' if approve_on_pass else previous_status
-        elif verdict in ('fixed', 'fixed_partial'):
-            summary['fixed'] += 1
-            comment = ('AI自检：试跑发现断言与真实响应不符，已自动修正 —— '
-                       + '；'.join(checked['fixes']))
-            if checked['unresolved']:
-                comment += '。待人工确认：' + '；'.join(checked['unresolved'])
-            new_status = 'pending_review'
+            comment = f'试跑通过（状态码 {status_code}），断言全部命中真实响应'
         elif verdict == 'error':
             summary['error'] += 1
-            reason = checked['unresolved'][0] if checked['unresolved'] else checked['error']
-            comment = f'AI自检：试跑未拿到响应 —— {reason}'
-            new_status = 'needs_revision'
+            comment = f'试跑未拿到响应 —— {checked.get("error") or "请求失败"}'
         else:
             summary['needs_revision'] += 1
-            comment = 'AI自检：' + '；'.join(checked['unresolved'] or ['断言未通过'])
-            new_status = 'needs_revision'
+            comment = '试跑未通过：' + '；'.join(checked['unresolved'] or ['断言未通过'])
 
+        # 只更新试跑结果，不改用例审核状态（避免误判通过/待修订）
         draft.self_check_result = checked
-        draft.status = new_status
-        draft.review_comment = comment[:2000]
-        draft.save(update_fields=['self_check_result', 'status', 'review_comment', 'updated_at'])
+        draft.save(update_fields=['self_check_result', 'updated_at'])
 
         ApiCaseDraftReview.objects.create(
-            draft=draft, reviewer=None, reviewer_name='AI', action='ai_review',
-            comment=comment[:2000], previous_status=previous_status, new_status=new_status,
-            extra={'verdict': verdict, 'status_code': status_code,
-                   'fixes': checked['fixes'], 'unresolved': checked['unresolved']})
+            draft=draft, reviewer=None, reviewer_name='系统', action='self_check',
+            comment=comment[:2000], previous_status=previous_status, new_status=previous_status,
+            extra={'verdict': verdict, 'status_code': status_code})
 
     task.ai_config_snapshot = dict(task.ai_config_snapshot or {})
     task.ai_config_snapshot['self_check'] = summary
@@ -921,10 +966,10 @@ def run_self_check(task, user, auto_fix=True, fix_values=False, approve_on_pass=
 
 
 def run_ai_review(task_id, user_id, auto_fix=True, fix_values=False, approve_on_pass=False):
-    """后台线程：AI 自审。
+    """后台线程：AI 审核。
 
-    1) 逐条试跑，按真实响应校验并自动修正断言（确定性规则，不依赖模型）；
-    2) 规则自检完成后，若 AI 配置可用，再让模型基于试跑结果给整体评审意见。
+    不再自动试跑——直接基于「已试跑并缓存」的响应头与响应体评审用例：
+    1) 用例设计合理性；2) 实际响应数据合理性。
     """
     from django.contrib.auth import get_user_model
     from django.db import connection
@@ -941,8 +986,6 @@ def run_ai_review(task_id, user_id, auto_fix=True, fix_values=False, approve_on_
     task = ApiCaseGenerationTask.objects.get(id=task_id)
 
     try:
-        summary = run_self_check(task, user, auto_fix, fix_values, approve_on_pass)
-
         updated = 0
         cfg = resolve_ai_config()
         if cfg:
@@ -954,26 +997,28 @@ def run_ai_review(task_id, user_id, auto_fix=True, fix_values=False, approve_on_
                 'url': draft.url,
                 'assertions': draft.assertions,
                 'expected_result': draft.expected_result,
-                'self_check': {
-                    'verdict': (draft.self_check_result or {}).get('verdict'),
-                    'status_code': (draft.self_check_result or {}).get('status_code'),
-                    'fixes': (draft.self_check_result or {}).get('fixes'),
-                    'unresolved': (draft.self_check_result or {}).get('unresolved'),
-                },
+                'response_headers': (draft.self_check_result or {}).get('response_headers'),
+                # 真实试跑拿到的响应体（脱敏、截断），用于评审「响应数据合理性」
+                'actual_response': (draft.self_check_result or {}).get('response_preview'),
             } for idx, draft in enumerate(drafts)]
 
             user_prompt = (
-                '以下用例已经真实试跑过一次，self_check 是试跑与断言自纠正的结果。\n'
-                '请基于真实执行结果评审：断言是否还有遗漏、场景是否覆盖不足，'
+                '以下用例已经真实试跑过，response_headers 是接口真实返回的响应头，'
+                'actual_response 是接口真实返回的响应体（可能为空）。\n'
+                '请基于真实响应评审：\n'
+                '1) 用例设计合理性（断言是否遗漏、场景是否覆盖不足、请求是否正确）；\n'
+                '2) 实际响应数据合理性（响应头与响应体是否完整、类型/值域是否合理、'
+                '有无业务矛盾或异常结构）。\n'
+                '注意：接口本身不是标准答案，应基于接口契约、业务常识判断数据是否合理。\n'
                 '给出通过/驳回/需修订的结论与简短意见。\n'
                 + json.dumps(payload, ensure_ascii=False, indent=2)
             )
 
             try:
-                text = call_llm(cfg, REVIEW_SYSTEM_PROMPT, user_prompt)
+                text = call_llm(cfg, _review_system_prompt(), user_prompt)
                 reviews = extract_json_array(text) or []
             except Exception as exc:
-                logger.warning('AI 复核意见生成失败（自检结果已保留）：%s', exc)
+                logger.warning('AI 复核意见生成失败：%s', exc)
                 reviews = []
 
             for item in reviews:
@@ -1010,6 +1055,160 @@ def run_ai_review(task_id, user_id, auto_fix=True, fix_values=False, approve_on_
             ApiCaseGenerationTask.objects.filter(pk=task_id).update(ai_review_running=False)
         except Exception:
             logger.exception('释放 AI 审核锁失败')
+
+
+def _build_revise_prompt(draft, review_comment, response_preview):
+    """构造「按审核意见 + 真实响应修订单条用例」的用户提示词。"""
+    original = {
+        'name': draft.name,
+        'method': draft.method,
+        'url': draft.url,
+        'headers': draft.headers,
+        'params': draft.params,
+        'body': draft.body,
+        'assertions': draft.assertions,
+        'expected_result': draft.expected_result,
+        'description': draft.description,
+        'priority': draft.priority,
+        'rationale': getattr(draft, 'ai_rationale', ''),
+    }
+    lines = [
+        '你是一名接口测试专家。下面是一条已有的接口用例，以及该用例真实试跑拿到的接口响应数据，'
+        '和 AI 审核对该用例给出的评审意见。',
+        '请对该用例做"最小改动"式修订，并输出修订后的单条用例 JSON：',
+        '1. 以【真实响应数据】为事实基准：优先只校正用例的"断言"和"预期结果"，'
+        '让它们去匹配真实响应（修正 json_path 指向、expected 期望值、字段名、状态码、contains 内容等）；',
+        '2. 不要重写请求：保持 url、method、headers、params、body 不变'
+        '（除非评审意见明确指出请求本身有误）；',
+        '3. 不要改变用例的核心测试目标与场景覆盖；',
+        '4. 只有当真实响应本身不合理（缺字段、错误码、结构错误）时，才在 expected_result / description 中说明，'
+        '但仍优先让断言去表达对真实合理响应的校验；',
+        '5. 只输出一个 JSON 数组，数组仅含一个修订后的用例对象，字段结构与原用例一致'
+        '（name/method/url/headers/params/body/assertions/expected_result/description/priority/rationale）。'
+        '未改动的部分请原样保留原值，不要另起炉灶重写。',
+        '',
+        '【原用例】',
+        json.dumps(original, ensure_ascii=False, indent=2),
+        '',
+        '【AI 评审意见】',
+        review_comment or '（无）',
+        '',
+        '【真实响应数据】',
+        response_preview or '（无，未拿到真实响应）',
+    ]
+    return '\n'.join(lines)
+
+
+def run_ai_revise(task_id, user_id, draft_ids=None):
+    """后台线程：根据 AI 审核意见与真实响应，自动改写用例。
+
+    不传 draft_ids 时，默认对「已被 AI 审核过」的用例全部修订；
+    传 draft_ids 时只修订指定草稿（如单条手动触发）。
+    """
+    from django.contrib.auth import get_user_model
+    from django.db import connection
+
+    from .models import ApiCaseDraft, ApiCaseDraftReview, ApiCaseGenerationTask
+
+    try:
+        connection.close()
+    except Exception:
+        pass
+
+    User = get_user_model()
+    user = User.objects.get(id=user_id)
+    task = ApiCaseGenerationTask.objects.get(id=task_id)
+
+    try:
+        drafts = ApiCaseDraft.objects.filter(task=task)
+        if draft_ids:
+            drafts = drafts.filter(id__in=draft_ids)
+        else:
+            reviewed_ids = ApiCaseDraftReview.objects.filter(
+                draft__task=task, action='ai_review').values_list(
+                'draft_id', flat=True).distinct()
+            drafts = drafts.filter(id__in=reviewed_ids)
+
+        cfg = resolve_ai_config()
+        if not cfg:
+            task.error_message = '未配置可用 AI 模型，无法 AI 修订'
+            task.save(update_fields=['error_message', 'updated_at'])
+            return
+
+        available_variables = set(_collect_variables(
+            getattr(task, 'environment', None), getattr(task, 'project', None)).keys())
+
+        revised = 0
+        for draft in drafts.order_by('order', 'id'):
+            ai_review = ApiCaseDraftReview.objects.filter(
+                draft=draft, action='ai_review').order_by('-id').first()
+            review_comment = (ai_review.comment or '').strip() if ai_review else ''
+            response_preview = (draft.self_check_result or {}).get('response_preview')
+
+            if not review_comment and not response_preview:
+                continue
+
+            user_prompt = _build_revise_prompt(draft, review_comment, response_preview)
+            try:
+                text, _ = call_llm_with_fallback(
+                    _generation_system_prompt(), user_prompt, max_tokens=8192)
+                cases = extract_json_array(text)
+                if not cases:
+                    # 兜底：模型可能只输出单个对象
+                    try:
+                        obj = json.loads(text[text.index('{'):text.rindex('}') + 1])
+                        cases = [obj]
+                    except Exception:
+                        cases = []
+            except Exception as exc:
+                logger.warning('AI 修订调用失败（草稿 %s）：%s', draft.id, exc)
+                continue
+
+            if not cases or not isinstance(cases[0], dict):
+                continue
+
+            fields = normalize_case(
+                cases[0], draft.order,
+                source_url=draft.url,
+                source_request=draft.source_request,
+                available_variables=available_variables,
+            )
+            previous_status = draft.status
+            # 最小改动：只校正「断言 / 预期结果 / 描述」，保留原请求与场景，
+            # 避免整条重写把本来合理的用例改坏（这是"太死板"的根因之一）
+            new_assertions = fields.get('assertions') or []
+            if new_assertions:
+                draft.assertions = new_assertions
+            if fields.get('expected_result'):
+                draft.expected_result = fields['expected_result']
+            if fields.get('description'):
+                draft.description = fields['description']
+            draft.status = 'pending_review'
+            draft.ai_raw = cases[0]
+            draft.save()
+
+            ApiCaseDraftReview.objects.create(
+                draft=draft, reviewer=None, reviewer_name='AI', action='ai_revise',
+                comment='AI 根据审核意见与真实响应修订用例：%s' % (
+                    (review_comment or '无明确意见，仅按真实响应优化')[:300]),
+                previous_status=previous_status, new_status='pending_review',
+                extra={'review_comment': review_comment[:2000] if review_comment else None})
+
+            revised += 1
+
+        task.ai_config_snapshot = dict(task.ai_config_snapshot or {})
+        task.ai_config_snapshot['last_ai_revise_at'] = timezone.now().isoformat()
+        task.ai_config_snapshot['last_ai_revise_count'] = revised
+        task.save(update_fields=['ai_config_snapshot', 'updated_at'])
+    except Exception as exc:
+        logger.exception('AI 修订接口用例失败')
+        task.error_message = f'AI 修订失败：{str(exc)[:500]}'
+        task.save(update_fields=['error_message', 'updated_at'])
+    finally:
+        try:
+            ApiCaseGenerationTask.objects.filter(pk=task_id).update(ai_review_running=False)
+        except Exception:
+            logger.exception('释放 AI 修订锁失败')
 
 
 def get_or_create_target_collection(task):
@@ -1302,8 +1501,22 @@ def _self_fix_assertions(draft, run_result, fix_values=False):
     return new_assertions, fixes, unresolved
 
 
+def _mask_headers(headers):
+    """脱敏响应头中的敏感字段（Cookie/Set-Cookie/Authorization 等），其余保留。"""
+    if not isinstance(headers, dict):
+        return {}
+    sensitive = ('cookie', 'authorization', 'token', 'set-cookie', 'x-csrf', 'x-xsrf')
+    out = {}
+    for k, v in headers.items():
+        out[k] = '***' if isinstance(k, str) and k.lower() in sensitive else v
+    return out
+
+
 def self_check_draft(draft, user, environment, auto_fix=True, fix_values=False):
-    """对单条草稿做「试跑 + 断言自纠正」，返回 (自检结果, 执行结果)。"""
+    """对单条草稿做「试跑」，返回 (自检结果, 执行结果)。
+
+    只记录断言能否跑通与真实响应，不再自动修改断言去「试图跑通」。
+    """
     run_result = run_draft(draft, user, environment, persist=False)
     status_code = run_result.get('status_code')
 
@@ -1320,6 +1533,21 @@ def self_check_draft(draft, user, environment, auto_fix=True, fix_values=False):
         'checked_at': timezone.now().isoformat(),
     }
 
+    # 真实响应预览：供「AI 审核」与「AI 修订」使用
+    raw_resp = run_result.get('json')
+    if raw_resp is None:
+        raw_resp = run_result.get('body')
+    if raw_resp is not None:
+        masked = raw_resp if not isinstance(raw_resp, (dict, list)) else _mask_value(raw_resp)
+        checked['response_preview'] = _truncate_text(
+            masked if isinstance(masked, str) else json.dumps(masked, ensure_ascii=False), 2000)
+    else:
+        checked['response_preview'] = None
+
+    # 真实响应头：供「AI 审核」评审响应数据合理性使用
+    resp_headers = (run_result.get('response_data') or {}).get('headers') or {}
+    checked['response_headers'] = _mask_headers(resp_headers)
+
     if status_code is None:
         checked['verdict'] = 'error'
         checked['unresolved'] = [checked['error'] or '请求未拿到响应']
@@ -1327,27 +1555,7 @@ def self_check_draft(draft, user, environment, auto_fix=True, fix_values=False):
 
     if run_result.get('success'):
         checked['verdict'] = 'passed'
-        return checked, run_result
-
-    if not auto_fix:
-        checked['verdict'] = 'needs_revision'
-        checked['unresolved'] = [_truncate_text(run_result.get('error'), 500)]
-        return checked, run_result
-
-    new_assertions, fixes, unresolved = _self_fix_assertions(draft, run_result, fix_values)
-    checked['fixes'] = fixes
-    checked['unresolved'] = unresolved
-
-    changed = new_assertions != (draft.assertions or [])
-    if changed:
-        draft.assertions = new_assertions
-        draft.save(update_fields=['assertions', 'updated_at'])
-
-    if changed and not unresolved:
-        checked['verdict'] = 'fixed'
-    elif changed:
-        checked['verdict'] = 'fixed_partial'
     else:
         checked['verdict'] = 'needs_revision'
-
+        checked['unresolved'] = [_truncate_text(run_result.get('error'), 500)]
     return checked, run_result

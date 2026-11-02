@@ -283,8 +283,14 @@ def execute_test_suite(test_suite, environment, executed_by):
                                 value = resolver.resolve(value)
                                 body_data[key] = value
                     elif body_type == 'raw':
-                        body_data = _replace_variables(api_request.body.get('data', ''), variables)
-                        body_data = resolver.resolve(body_data)
+                        raw_data = api_request.body.get('data', '')
+                        if isinstance(raw_data, str):
+                            body_data = _replace_variables(raw_data, variables)
+                            body_data = resolver.resolve(body_data)
+                        else:
+                            # 原始文本被存成结构化对象时，同样递归解析其中的字符串
+                            body_data = _resolve_variables_in_dict(
+                                _replace_variables_in_dict(raw_data, variables), resolver)
                     elif body_type == 'binary':
                         file_data = api_request.body.get('file_data')
                         if file_data:

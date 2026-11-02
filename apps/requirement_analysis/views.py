@@ -1344,6 +1344,51 @@ class PromptConfigViewSet(viewsets.ModelViewSet):
 3. **补充建议**：直接给出建议补充的测试场景或用例。
 4. **修正后的用例**（可选）：如果发现严重问题，请直接提供修正后的用例版本。"""
 
+            # 接口用例生成提示词
+            api_gen_path = os.path.join(settings.BASE_DIR, 'docs/api_case_generate.md')
+            try:
+                with open(api_gen_path, 'r', encoding='utf-8') as f:
+                    defaults['api_case_generate'] = f.read()
+            except FileNotFoundError:
+                defaults['api_case_generate'] = """你是一名资深接口测试专家，负责编写可直接被自动化执行的接口测试用例。
+你必须只输出严格合法的 JSON 数组，不要输出任何解释、Markdown 说明或额外文字。
+数组每个元素代表一条接口用例，字段如下：
+{
+  "name": "用例名称",
+  "method": "GET|POST|PUT|PATCH|DELETE",
+  "url": "完整URL或路径",
+  "headers": {"Content-Type": "application/json"},
+  "params": {"key": "value"},
+  "body": {"type": "json", "data": {}},
+  "assertions": [{"name": "状态码断言", "type": "status_code", "expected": 200}],
+  "expected_result": "预期结果描述",
+  "description": "用例描述/测试点",
+  "priority": "P0|P1|P2|P3",
+  "rationale": "为什么这样设计"
+}
+断言 type 只允许：status_code / response_time / contains / json_path / header。
+status_code 的 expected 必须是整数（如 200）。
+json_path 断言需额外提供 json_path 字段，如 "$.code"。
+body.type 只允许 json / form-data / raw / none。"""
+
+            # 接口用例评审提示词
+            api_rev_path = os.path.join(settings.BASE_DIR, 'docs/api_case_review.md')
+            try:
+                with open(api_rev_path, 'r', encoding='utf-8') as f:
+                    defaults['api_case_review'] = f.read()
+            except FileNotFoundError:
+                defaults['api_case_review'] = """你是一名接口测试用例评审专家。
+对给定的用例逐条评审，只输出严格合法的 JSON 数组，不要任何额外文字。
+每个元素：{"index": 用例序号(从0开始), "action": "approve|reject|needs_revision", "comment": "简短评审意见"}
+
+评审分两层，缺一不可：
+【第一层：用例设计合理性】URL/参数是否合理、是否覆盖正向+异常+边界、断言是否充分且可执行、是否缺少鉴权或必要请求头。
+【第二层：实际响应数据合理性】若用例已真实试跑并附带 actual_response（接口真实返回的响应体），请评审该响应数据本身是否合理：
+  - 字段是否完整、类型是否正确、关键字段是否为空或缺失；
+  - 数值/枚举/时间是否在合理范围，是否存在明显异常（如空数组、错误码被包装成成功、业务字段前后矛盾）；
+  - 重要：接口本身不是标准答案，actual_response 只是当前"现状"，你要基于接口契约、业务常识和用例设计目标判断数据"应不应该长这样"；
+  - 若响应数据明显不合理，即使断言跑通了也要给出 needs_revision 或 reject，并在 comment 中明确指出数据问题。"""
+
             return Response({
                 'message': '默认提示词加载成功',
                 'defaults': defaults

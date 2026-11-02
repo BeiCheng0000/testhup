@@ -111,12 +111,16 @@ class VariableResolver:
             'validate_expression': self._call_crontab_tool,
             
             # 时间日期函数
-            'timestamp': self._timestamp,
-            'timestamp_sec': self._timestamp_sec,
-            'datetime': self._datetime,
-            'date': self._date,
-            'time': self._time,
-            'date_offset': self._date_offset,
+            # 注意：注册表统一以 (func_name, args) 调用（见 _evaluate_expression），
+            # 之前直接挂 self._timestamp 会因签名不匹配抛 TypeError，
+            # 异常被 resolve 吞掉后 ${timestamp()} 只能原样保留、看起来「没生效」
+            'timestamp': lambda fn, args: self._timestamp(),
+            'timestamp_sec': lambda fn, args: self._timestamp_sec(),
+            'datetime': lambda fn, args: self._datetime(
+                args[0] if args else '%Y-%m-%d %H:%M:%S'),
+            'date': lambda fn, args: self._date(args[0] if args else '%Y-%m-%d'),
+            'time': lambda fn, args: self._time(args[0] if args else '%H:%M:%S'),
+            'date_offset': lambda fn, args: self._date_offset(*args),
         }
     
     def resolve(self, text):
@@ -137,7 +141,13 @@ class VariableResolver:
         def replace_func(match):
             expression = match.group(1)
             try:
-                return str(self._evaluate_expression(expression))
+                value = self._evaluate_expression(expression)
+                # count>1 时工具返回的是列表，直接 str() 会得到 "[6, 5, 8, 8, 9, 6]"
+                # 这种 Python 列表字面量，插进请求体不是合法值。
+                # 拼接成连续字符串：${random_int(0,9,6)} -> "658896"
+                if isinstance(value, (list, tuple)):
+                    return ''.join(str(item) for item in value)
+                return str(value)
             except Exception as e:
                 if isinstance(e, UnicodeEncodeError):
                     return match.group(0)

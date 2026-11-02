@@ -353,6 +353,8 @@ export default {
     selectPromptType: 'Select Prompt Type',
     writerPrompt: 'Test Case Writer Prompt',
     reviewerPrompt: 'Test Case Reviewer Prompt',
+    apiCaseGeneratePrompt: 'API Case Generation Prompt',
+    apiCaseReviewPrompt: 'API Case Review Prompt',
     isActive: 'Enable',
     promptContent: 'Prompt Content',
     contentPlaceholder: 'Enter prompt content, supports variables...',
@@ -388,6 +390,8 @@ export default {
     confirmLoad: 'Confirm Load',
     defaultWriterName: 'Default Test Case Writer Prompt',
     defaultReviewerName: 'Default Test Case Reviewer Prompt',
+    defaultApiCaseGenerateName: 'Default API Case Generation Prompt',
+    defaultApiCaseReviewName: 'Default API Case Review Prompt',
     defaultsLoadSuccess: 'Default prompts loaded successfully',
 
     // Empty State

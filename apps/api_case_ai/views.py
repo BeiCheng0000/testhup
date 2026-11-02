@@ -22,6 +22,7 @@ from .services import (
     adopt_draft,
     adopt_task,
     run_ai_review,
+    run_ai_revise,
     run_draft,
     run_generation,
     start_execution,
@@ -163,10 +164,10 @@ class ApiCaseGenerationTaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='ai-review')
     def ai_review(self, request, pk=None):
-        """AI 自审：逐条试跑 → 按真实响应校验并修正断言 → 模型复核意见"""
+        """AI 审核：基于「已试跑并缓存」的响应头与响应体，评审用例设计 + 响应数据合理性。"""
         task = self.get_object()
 
-        # 并发防护：同一任务同时只允许一个 AI 审核；只有「未超时且仍在跑」才拒绝
+        # 并发防护：同一任务同时只允许一个 AI 操作；只有「未超时且仍在跑」才拒绝
         stale_before = timezone.now() - timedelta(minutes=AI_REVIEW_STALE_MINUTES)
         claimed = ApiCaseGenerationTask.objects.filter(pk=task.pk).exclude(
             ai_review_running=True, ai_review_started_at__gt=stale_before,
@@ -177,20 +178,49 @@ class ApiCaseGenerationTaskViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        def _flag(name, default):
-            value = request.data.get(name, default)
-            if isinstance(value, str):
-                return value.lower() not in ('false', '0', '', 'no')
-            return bool(value)
-
         threading.Thread(
-            target=run_ai_review,
-            args=(task.id, request.user.id,
-                  _flag('auto_fix', True),
-                  _flag('fix_values', False),
-                  _flag('approve_on_pass', False)),
+            target=run_ai_review, args=(task.id, request.user.id),
             daemon=True).start()
-        return Response({'message': 'AI 审核已启动：将逐条试跑并按真实响应校验断言'})
+        return Response({'message': 'AI 审核已启动：将基于已试跑的响应数据评审用例'})
+
+    @action(detail=True, methods=['post'], url_path='self-check')
+    def self_check(self, request, pk=None):
+        """一键试跑：对任务下所有用例试跑一次，记录断言能否跑通并缓存响应头/实体。"""
+        task = self.get_object()
+        stale_before = timezone.now() - timedelta(minutes=AI_REVIEW_STALE_MINUTES)
+        claimed = ApiCaseGenerationTask.objects.filter(pk=task.pk).exclude(
+            ai_review_running=True, ai_review_started_at__gt=stale_before,
+        ).update(ai_review_running=True, ai_review_started_at=timezone.now())
+        if not claimed:
+            return Response(
+                {'message': '该任务正在执行 AI 操作，请等当前操作结束后再启动'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        threading.Thread(
+            target=run_self_check,
+            args=(task, request.user, False, False, False),
+            daemon=True).start()
+        return Response({'message': '一键试跑已启动：将试跑所有用例并缓存响应'})
+
+    @action(detail=True, methods=['post'], url_path='ai-revise')
+    def ai_revise(self, request, pk=None):
+        """AI 修订：根据审核意见与真实响应，自动改写用例。可传 draft_ids 只修订指定草稿。"""
+        task = self.get_object()
+        stale_before = timezone.now() - timedelta(minutes=AI_REVIEW_STALE_MINUTES)
+        claimed = ApiCaseGenerationTask.objects.filter(pk=task.pk).exclude(
+            ai_review_running=True, ai_review_started_at__gt=stale_before,
+        ).update(ai_review_running=True, ai_review_started_at=timezone.now())
+        if not claimed:
+            return Response(
+                {'message': '该任务正在执行 AI 操作，请等当前操作结束后再启动'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        draft_ids = request.data.get('draft_ids') or None
+        threading.Thread(
+            target=run_ai_revise,
+            args=(task.id, request.user.id, draft_ids),
+            daemon=True).start()
+        return Response({'message': 'AI 修订已启动：将根据审核意见与真实响应改写用例'})
 
     @action(detail=True, methods=['post'], url_path='regenerate')
     def regenerate(self, request, pk=None):

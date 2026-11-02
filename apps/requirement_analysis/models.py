@@ -253,6 +253,8 @@ class PromptConfig(models.Model):
     PROMPT_CHOICES = [
         ('writer', '用例编写提示词'),
         ('reviewer', '用例评审提示词'),
+        ('api_case_generate', '接口用例生成提示词'),
+        ('api_case_review', '接口用例评审提示词'),
     ]
 
     name = models.CharField(max_length=100, verbose_name='配置名称')

@@ -1,21 +1,26 @@
 @echo off
-echo Æô¶¯TestHubÉú²ú»·¾³...
+chcp 65001 >nul
+cd /d "%~dp0."
+echo å¯åŠ¨TestHubç”Ÿäº§çŽ¯å¢ƒï¼ˆå„æœåŠ¡å‡ä¸ºåŽå°éšè—è¿è¡Œï¼Œä»»åŠ¡æ ä¸å‡ºçŽ°å›¾æ ‡ï¼‰...
 
-echo Æô¶¯Djangoºó¶Ë·þÎñ...
-start "Django Backend" cmd /k start_backend.bat
+echo å¯åŠ¨DjangoåŽç«¯æœåŠ¡...
+call "%~dp0start_backend.bat"
 
-echo Æô¶¯Celery·þÎñ...
-start "Celery Worker" cmd /k start_celery.bat
+echo å¯åŠ¨CeleryæœåŠ¡...
+call "%~dp0start_celery.bat"
 
-echo Æô¶¯¶¨Ê±ÈÎÎñµ÷¶ÈÆ÷...
-start "Task Scheduler" cmd /k start_scheduler.bat
+echo å¯åŠ¨å®šæ—¶ä»»åŠ¡è°ƒåº¦å™¨...
+call "%~dp0start_scheduler.bat"
 
-echo ÕýÔÚÆô¶¯ Nginx...
-cd /d C:\nginx
-start nginx
-echo Nginx ÒÑÆô¶¯
+echo æ­£åœ¨å¯åŠ¨ Nginx...
+if exist "C:\nginx\nginx.exe" (
+    start "" /d "C:\nginx" nginx.exe
+    echo Nginx å·²å¯åŠ¨
+) else (
+    echo æœªæ‰¾åˆ° C:\nginx\nginx.exeï¼Œè·³è¿‡ Nginx
+)
 
-echo ËùÓÐ·þÎñÒÑÆô¶¯!
-echo Ç°¶ËµØÖ·: http://localhost
-echo ºó¶ËAPI: http://localhost/api/
-pause
+echo æ‰€æœ‰æœåŠ¡å·²å¯åŠ¨!
+echo å‰ç«¯åœ°å€: http://localhost
+echo åŽç«¯API: http://localhost/api/
+timeout /t 5 >nul

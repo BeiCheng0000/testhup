@@ -23,6 +23,7 @@ class ApiCaseDraftSerializer(serializers.ModelSerializer):
     source_request_name = serializers.SerializerMethodField()
     source_request_method = serializers.SerializerMethodField()
     reviews = ApiCaseDraftReviewSerializer(many=True, read_only=True)
+    latest_ai_review = serializers.SerializerMethodField()
 
     class Meta:
         model = ApiCaseDraft
@@ -31,7 +32,7 @@ class ApiCaseDraftSerializer(serializers.ModelSerializer):
             'pre_request_script', 'post_request_script', 'assertions',
             'description', 'expected_result', 'priority', 'ai_rationale', 'ai_raw',
             'status', 'status_display', 'review_comment', 'reviewed_by', 'reviewed_at',
-            'self_check_result',
+            'self_check_result', 'latest_ai_review',
             'source_request', 'source_request_name', 'source_request_method',
             'adopted_request', 'adopted_request_id', 'test_suite', 'is_adopted',
             'order', 'created_by', 'created_at', 'updated_at', 'reviews',
@@ -44,6 +45,20 @@ class ApiCaseDraftSerializer(serializers.ModelSerializer):
 
     def get_source_request_method(self, obj):
         return obj.source_request.method if obj.source_request_id else ''
+
+    def get_latest_ai_review(self, obj):
+        """最新一条 AI 审核结论（action=ai_review 且 reviewer_name=AI）。"""
+        from .models import ApiCaseDraftReview
+        review = ApiCaseDraftReview.objects.filter(
+            draft=obj, action='ai_review', reviewer_name='AI'
+        ).order_by('-id').first()
+        if not review:
+            return None
+        return {
+            'comment': review.comment,
+            'suggestion': (review.extra or {}).get('suggestion'),
+            'created_at': review.created_at,
+        }
 
 
 class ApiCaseGenerationTaskSerializer(serializers.ModelSerializer):

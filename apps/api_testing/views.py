@@ -538,15 +538,31 @@ class ApiRequestViewSet(viewsets.ModelViewSet):
                 body_content = request_body.get('data')
 
                 if body_type == 'json':
-                    if isinstance(body_content, dict):
+                    # JSON 体的 data 可能是对象，也可能是数组（如埋点批量上报），
+                    # 只判 dict 会让数组整条跳过解析，${...} 原样发出去
+                    if isinstance(body_content, (dict, list)):
                         body_data = self._replace_variables_in_dict(body_content, variables)
                         body_data = self._resolve_variables_in_dict(body_data, resolver)
+                    elif isinstance(body_content, str):
+                        # JSON 体以字符串存储时也要解析函数表达式（如 ${random_int}），
+                        # 否则单接口「发送」会原样把 ${...} 发到服务端
+                        resolved = resolver.resolve(
+                            self._replace_variables(body_content, variables))
+                        try:
+                            body_data = json.loads(resolved)
+                        except (ValueError, TypeError):
+                            # 不是合法 JSON（纯文本等）则按原始字符串原样发送
+                            body_data = resolved
                     else:
                         body_data = body_content
                 elif body_type == 'raw':
                     if isinstance(body_content, str):
                         body_data = self._replace_variables(body_content, variables)
                         body_data = resolver.resolve(body_data)
+                    elif isinstance(body_content, (dict, list)):
+                        # 原始文本偶尔被存成结构化对象，同样要递归解析
+                        body_data = self._replace_variables_in_dict(body_content, variables)
+                        body_data = self._resolve_variables_in_dict(body_data, resolver)
                     else:
                         body_data = body_content
                 elif body_type in ['form-data', 'x-www-form-urlencoded']:
